@@ -1,0 +1,12 @@
+[package]
+name = "timetogetrusty"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+pollster = "0.4.0"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
+wgpu = "29.0.3"
+winit = "0.30.13"
