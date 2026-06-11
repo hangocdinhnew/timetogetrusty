@@ -13,7 +13,7 @@ use winit::{
     event_loop::OwnedDisplayHandle
 };
 
-struct GraphicsState {
+struct GraphicsContext {
     window: Arc<Window>,
     instance: Instance,
     adapter: Adapter,
@@ -36,7 +36,7 @@ pub enum RenderCommand {
 }
 
 pub struct Renderer {
-    gstate: GraphicsState,
+    gfx: GraphicsContext,
     commands: Vec<RenderCommand>,
     meshes: Vec<Mesh>,
 }
@@ -127,7 +127,7 @@ impl Renderer {
 	    cache: None,
 	});
 
-	let gstate = GraphicsState {
+	let gfx = GraphicsState {
 	    window,
 	    instance,
 	    adapter,
@@ -140,29 +140,29 @@ impl Renderer {
 	};
 
 	Ok(Self {
-	    gstate,
+	    gfx,
 	    commands: Vec::new(),
 	    meshes: Vec::new(),
 	})
     }
 
     pub fn create_mesh(&mut self, vertices: &[f32], indices: &[u32]) -> MeshID {
-	let vertices_buf = self.gstate.device.create_buffer(&BufferDescriptor {
+	let vertices_buf = self.gfx.device.create_buffer(&BufferDescriptor {
 	    label: None,
 	    size: std::mem::size_of_val(vertices) as u64,
 	    usage: BufferUsages::COPY_DST | BufferUsages::VERTEX,
 	    mapped_at_creation: false,
 	});
 
-	let indices_buf = self.gstate.device.create_buffer(&BufferDescriptor {
+	let indices_buf = self.gfx.device.create_buffer(&BufferDescriptor {
 	    label: None,
 	    size: std::mem::size_of_val(indices) as u64,
 	    usage: BufferUsages::COPY_DST | BufferUsages::INDEX,
 	    mapped_at_creation: false,
 	});
 
-	self.gstate.queue.write_buffer(&vertices_buf, 0, bytemuck::cast_slice(vertices));
-	self.gstate.queue.write_buffer(&indices_buf, 0, bytemuck::cast_slice(indices));
+	self.gfx.queue.write_buffer(&vertices_buf, 0, bytemuck::cast_slice(vertices));
+	self.gfx.queue.write_buffer(&indices_buf, 0, bytemuck::cast_slice(indices));
 
 	self.meshes.push(Mesh {
 	    vertices_buf,
@@ -180,19 +180,19 @@ impl Renderer {
     }
 
     pub fn draw(&mut self) {
-	let surface_texture = match self.gstate.surface.get_current_texture() {
+	let surface_texture = match self.gfx.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => texture,
 
             wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => return,
 
             wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
                 drop(texture);
-                self.gstate.reconfigure_surface();
+                self.gfx.reconfigure_surface();
                 return;
             }
 
             wgpu::CurrentSurfaceTexture::Outdated => {
-                self.gstate.reconfigure_surface();
+                self.gfx.reconfigure_surface();
                 return;
             }
 
@@ -201,8 +201,8 @@ impl Renderer {
             }
 
             wgpu::CurrentSurfaceTexture::Lost => {
-                self.gstate.surface = self.gstate.instance.create_surface(self.gstate.window.clone()).unwrap();
-                self.gstate.reconfigure_surface();
+                self.gfx.surface = self.gfx.instance.create_surface(self.gfx.window.clone()).unwrap();
+                self.gfx.reconfigure_surface();
                 return;
             }
         };
@@ -210,11 +210,11 @@ impl Renderer {
 	let texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
-                format: Some(self.gstate.surface_caps.formats[0].add_srgb_suffix()),
+                format: Some(self.gfx.surface_caps.formats[0].add_srgb_suffix()),
                 ..Default::default()
             });
 
-	let mut encoder = self.gstate.device.create_command_encoder(&Default::default());
+	let mut encoder = self.gfx.device.create_command_encoder(&Default::default());
 	{
             let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 		label: None,
@@ -233,7 +233,7 @@ impl Renderer {
 		multiview_mask: None,
             });
 
-	    renderpass.set_pipeline(&self.gstate.mesh_pipeline);
+	    renderpass.set_pipeline(&self.gfx.mesh_pipeline);
 
 	    let mut last_id: Option<usize> = None;
 
@@ -254,7 +254,7 @@ impl Renderer {
 	    }
 	}
 
-	self.gstate.queue.submit(Some(encoder.finish()));
+	self.gfx.queue.submit(Some(encoder.finish()));
 	surface_texture.present();
 
 	self.commands.clear();
@@ -265,12 +265,12 @@ impl Renderer {
 	    return;
 	}
 
-	self.gstate.surface_config.width = width;
-	self.gstate.surface_config.height = height;
+	self.gfx.surface_config.width = width;
+	self.gfx.surface_config.height = height;
 
-	self.gstate.surface.configure(
-	    &self.gstate.device,
-	    &self.gstate.surface_config,
+	self.gfx.surface.configure(
+	    &self.gfx.device,
+	    &self.gfx.surface_config,
 	);
     }
 }
