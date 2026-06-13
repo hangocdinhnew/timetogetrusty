@@ -23,6 +23,8 @@ struct GraphicsContext {
     surface_config: SurfaceConfiguration,
     surface_caps: SurfaceCapabilities,
     mesh_pipeline: RenderPipeline,
+    model_ubuf: wgpu::Buffer,
+    uniform_bg: wgpu::BindGroup,
 }
 
 struct Mesh {
@@ -32,13 +34,14 @@ struct Mesh {
 }
 
 pub enum RenderCommand {
-    Mesh { id: MeshID },
+    Mesh { id: MeshID, transform: glam::Mat4 },
 }
 
 pub struct Renderer {
     gfx: GraphicsContext,
     commands: Vec<RenderCommand>,
     meshes: Vec<Mesh>,
+    last_transform: glam::Mat4,
 }
 
 pub type MeshID = usize;
@@ -96,9 +99,51 @@ impl Renderer {
 	    source: wgpu::ShaderSource::Wgsl(include_str!("Mesh.wgsl").into()),
 	});
 
+	let model_ubuf = device.create_buffer(&BufferDescriptor {
+	    label: None,
+	    size: size_of::<glam::Mat4>() as u64,
+	    usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM,
+	    mapped_at_creation: false,
+	});
+
+	queue.write_buffer(&model_ubuf, 0, bytemuck::bytes_of(&glam::Mat4::from_translation(glam::Vec3::ZERO)));
+
+	let uniform_bglayout =
+	    device.create_bind_group_layout(
+		&wgpu::BindGroupLayoutDescriptor {
+		    label: Some("Uniform Layout"),
+		    entries: &[
+			wgpu::BindGroupLayoutEntry {
+			    binding: 0,
+			    visibility: wgpu::ShaderStages::VERTEX,
+			    ty: wgpu::BindingType::Buffer {
+				ty: wgpu::BufferBindingType::Uniform,
+				has_dynamic_offset: false,
+				min_binding_size: None,
+			    },
+			    count: None,
+			},
+		    ],
+		}
+	    );
+
+	let uniform_bg =
+	    device.create_bind_group(
+		&wgpu::BindGroupDescriptor {
+		    label: Some("Model Uniform Bind Group"),
+		    layout: &uniform_bglayout,
+		    entries: &[
+			wgpu::BindGroupEntry {
+			    binding: 0,
+			    resource: model_ubuf.as_entire_binding(),
+			},
+		    ],
+		}
+	    );
+
 	let mesh_playout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 	    label: Some("Mesh pipeline layout"),
-	    bind_group_layouts: &[],
+	    bind_group_layouts: &[Some(&uniform_bglayout)],
 	    immediate_size: 0,
 	});
 
@@ -127,7 +172,7 @@ impl Renderer {
 	    cache: None,
 	});
 
-	let gfx = GraphicsState {
+	let gfx = GraphicsContext {
 	    window,
 	    instance,
 	    adapter,
@@ -137,12 +182,15 @@ impl Renderer {
 	    surface_config,
 	    surface_caps: caps,
 	    mesh_pipeline,
+	    model_ubuf,
+	    uniform_bg,
 	};
 
 	Ok(Self {
 	    gfx,
 	    commands: Vec::new(),
 	    meshes: Vec::new(),
+	    last_transform: glam::Mat4::from_translation(glam::Vec3::ZERO),
 	})
     }
 
@@ -173,9 +221,10 @@ impl Renderer {
 	return self.meshes.len() - 1;
     }
 
-    pub fn submit_mesh(&mut self, id: MeshID) {
+    pub fn submit_mesh(&mut self, id: MeshID, transform: glam::Mat4) {
 	self.commands.push(RenderCommand::Mesh {
 	    id,
+	    transform,
 	});
     }
 
@@ -238,13 +287,24 @@ impl Renderer {
 	    let mut last_id: Option<usize> = None;
 
 	    for command in &self.commands {
-		if let RenderCommand::Mesh {id} = command {
+		if let RenderCommand::Mesh {id, transform} = command {
 		    let id = *id;
 		    let mesh = &self.meshes[id];
+
+		    if self.last_transform != *transform {
+			self.gfx.queue.write_buffer(
+			    &self.gfx.model_ubuf,
+			    0,
+			    bytemuck::bytes_of(transform),
+			);
+			
+			self.last_transform = *transform;
+		    }
 		    
 		    if last_id != Some(id) {
 			renderpass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
 			renderpass.set_index_buffer(mesh.indices_buf.slice(..), wgpu::IndexFormat::Uint32);
+			renderpass.set_bind_group(0, &self.gfx.uniform_bg, &[]);
 
 			last_id = Some(id);
 		    }
@@ -275,7 +335,7 @@ impl Renderer {
     }
 }
 
-impl GraphicsState {
+impl GraphicsContext {
     pub fn reconfigure_surface(&mut self) {
 	self.surface.configure(
 	    &self.device,

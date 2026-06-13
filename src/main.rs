@@ -22,6 +22,8 @@ pub struct App {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer>,
     square: MeshID,
+    square_transform: glam::Mat4,
+    time: f32,
 }
 
 const VERTICES_SQUARE: [f32; 3*4] = [
@@ -79,7 +81,11 @@ impl ApplicationHandler for App {
 		window.request_redraw();
             },
             WindowEvent::RedrawRequested => {
-		renderer.submit_mesh(self.square);
+		self.time += 1.0 / 60.0;
+		
+		self.square_transform = glam::Mat4::from_rotation_y(self.time * 3.14);
+
+		renderer.submit_mesh(self.square, self.square_transform);
 		renderer.draw();
 		
                 window.request_redraw();
