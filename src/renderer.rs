@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use wgpu::{
     BufferUsages, BufferDescriptor,
@@ -10,6 +11,7 @@ use winit::{
 };
 
 mod graphics_context;
+pub use graphics_context::MeshInstance;
 use graphics_context::GraphicsContext;
 
 struct Mesh {
@@ -26,7 +28,7 @@ pub struct Renderer {
     gfx: GraphicsContext,
     commands: Vec<RenderCommand>,
     meshes: Vec<Mesh>,
-    last_transform: glam::Mat4,
+    batches: HashMap<MeshID, Vec<MeshInstance>>,
 }
 
 pub type MeshID = usize;
@@ -39,11 +41,11 @@ impl Renderer {
 	    gfx,
 	    commands: Vec::new(),
 	    meshes: Vec::new(),
-	    last_transform: glam::Mat4::from_translation(glam::Vec3::ZERO),
+	    batches: HashMap::new(),
 	})
     }
 
-    pub fn create_mesh(&mut self, vertices: &[f32], indices: &[u32]) -> MeshID {
+    pub fn upload_mesh(&mut self, vertices: &[f32], indices: &[u32]) -> MeshID {
 	let vertices_buf = self.gfx.device.create_buffer(&BufferDescriptor {
 	    label: None,
 	    size: std::mem::size_of_val(vertices) as u64,
@@ -86,12 +88,12 @@ impl Renderer {
             wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
                 drop(texture);
                 self.gfx.reconfigure_surface();
-                return;
+		return;
             }
 
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.gfx.reconfigure_surface();
-                return;
+		return;
             }
 
             wgpu::CurrentSurfaceTexture::Validation => {
@@ -101,7 +103,7 @@ impl Renderer {
             wgpu::CurrentSurfaceTexture::Lost => {
                 self.gfx.surface = self.gfx.instance.create_surface(self.gfx.window.clone()).unwrap();
                 self.gfx.reconfigure_surface();
-                return;
+		return;
             }
         };
 
@@ -125,7 +127,14 @@ impl Renderer {
 			store: wgpu::StoreOp::Store,
                     },
 		})],
-		depth_stencil_attachment: None,
+		depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+		    view: &self.gfx.depth_view,
+		    depth_ops: Some(wgpu::Operations {
+			load: wgpu::LoadOp::Clear(1.0),
+			store: wgpu::StoreOp::Store,
+		    }),
+		    stencil_ops: None,
+		}),
 		timestamp_writes: None,
 		occlusion_query_set: None,
 		multiview_mask: None,
@@ -133,39 +142,44 @@ impl Renderer {
 
 	    renderpass.set_pipeline(&self.gfx.mesh_pipeline);
 
-	    let mut last_id: Option<usize> = None;
-
 	    for command in &self.commands {
 		if let RenderCommand::Mesh {id, transform} = command {
 		    let id = *id;
 		    let mesh = &self.meshes[id];
 
-		    if self.last_transform != *transform {
-			self.gfx.queue.write_buffer(
-			    &self.gfx.model_ubuf,
-			    0,
-			    bytemuck::bytes_of(transform),
-			);
-			
-			self.last_transform = *transform;
-		    }
-		    
-		    if last_id != Some(id) {
-			renderpass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
-			renderpass.set_index_buffer(mesh.indices_buf.slice(..), wgpu::IndexFormat::Uint32);
-			renderpass.set_bind_group(0, &self.gfx.uniform_bg, &[]);
+		    let mesh_instance = MeshInstance {
+			model: *transform,
+		    };
 
-			last_id = Some(id);
-		    }
-
-		    renderpass.draw_indexed(0..mesh.index_count, 0, 0..1);
+		    self.batches
+			.entry(id)
+			.or_default()
+			.push(mesh_instance);
 		}
+	    }
+
+	    for (id, instances) in &self.batches {
+		let id = *id;
+		let mesh = &self.meshes[id];
+
+		self.gfx.queue.write_buffer(
+		    &self.gfx.model_sbuf,
+		    0,
+		    bytemuck::cast_slice(instances),
+		);
+
+		renderpass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
+		renderpass.set_index_buffer(mesh.indices_buf.slice(..), wgpu::IndexFormat::Uint32);
+		renderpass.set_bind_group(0, &self.gfx.bind_group, &[]);
+
+		renderpass.draw_indexed(0..mesh.index_count, 0, 0..(instances.len() as u32));
 	    }
 	}
 
 	self.gfx.queue.submit(Some(encoder.finish()));
 	surface_texture.present();
 
+	self.batches.clear();
 	self.commands.clear();
     }
     
@@ -181,5 +195,7 @@ impl Renderer {
 	    &self.gfx.device,
 	    &self.gfx.surface_config,
 	);
+
+	self.gfx.recreate_depth(width, height);
     }
 }

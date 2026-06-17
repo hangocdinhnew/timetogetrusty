@@ -22,7 +22,6 @@ pub struct App {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer>,
     square: MeshID,
-    square_transform: glam::Mat4,
     time: f32,
 }
 
@@ -63,7 +62,7 @@ impl ApplicationHandler for App {
 	self.square = self.renderer
 	    .as_mut()
 	    .unwrap()
-	    .create_mesh(&VERTICES_SQUARE, &INDICES_SQUARE);
+	    .upload_mesh(&VERTICES_SQUARE, &INDICES_SQUARE);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
@@ -81,13 +80,17 @@ impl ApplicationHandler for App {
 		window.request_redraw();
             },
             WindowEvent::RedrawRequested => {
-		self.time += 1.0 / 60.0;
+		renderer.submit_mesh(
+		    self.square,
+		    glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.25, 0.0))
+		);
 		
-		self.square_transform = glam::Mat4::from_rotation_y(self.time * 3.14);
-
-		renderer.submit_mesh(self.square, self.square_transform);
+		renderer.submit_mesh(
+		    self.square,
+		    glam::Mat4::from_translation(glam::Vec3::new(0.0, -0.25, 0.0))
+		);
 		renderer.draw();
-		
+
                 window.request_redraw();
             },
             _ => (),

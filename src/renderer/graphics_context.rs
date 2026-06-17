@@ -7,11 +7,17 @@ use wgpu::{
     Instance, InstanceDescriptor,
     Adapter, RequestAdapterOptions, Device, DeviceDescriptor, Queue,
     Surface, SurfaceCapabilities, SurfaceConfiguration, PresentMode, TextureUsages,
-    BufferUsages, BufferDescriptor,
-    RenderPipeline
+    Buffer, BufferUsages, BufferDescriptor,
+    BindGroup, RenderPipeline, Texture,
 };
 
 use std::sync::Arc;
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MeshInstance {
+    pub model: glam::Mat4,
+}
 
 pub struct GraphicsContext {
     pub window: Arc<Window>,
@@ -23,8 +29,9 @@ pub struct GraphicsContext {
     pub surface_config: SurfaceConfiguration,
     pub surface_caps: SurfaceCapabilities,
     pub mesh_pipeline: RenderPipeline,
-    pub model_ubuf: wgpu::Buffer,
-    pub uniform_bg: wgpu::BindGroup,
+    pub model_sbuf: wgpu::Buffer,
+    pub bind_group: wgpu::BindGroup,
+    pub depth_view: wgpu::TextureView,
 }
 
 pub const VERTEX_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
@@ -80,25 +87,31 @@ impl GraphicsContext {
 	    source: wgpu::ShaderSource::Wgsl(include_str!("shaders/Mesh.wgsl").into()),
 	});
 
-	let model_ubuf = device.create_buffer(&BufferDescriptor {
+	let model_sbuf = device.create_buffer(&BufferDescriptor {
 	    label: None,
-	    size: size_of::<glam::Mat4>() as u64,
-	    usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM,
+	    size: (size_of::<MeshInstance>() as u64) * 256,
+	    usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
 	    mapped_at_creation: false,
 	});
 
-	queue.write_buffer(&model_ubuf, 0, bytemuck::bytes_of(&glam::Mat4::from_translation(glam::Vec3::ZERO)));
+	let mesh_instance = MeshInstance {
+	    model: glam::Mat4::IDENTITY,
+	};
 
-	let uniform_bglayout =
+	queue.write_buffer(&model_sbuf, 0, bytemuck::bytes_of(&mesh_instance));
+
+	let bg_layout =
 	    device.create_bind_group_layout(
 		&wgpu::BindGroupLayoutDescriptor {
-		    label: Some("Uniform Layout"),
+		    label: Some("Bind Group Layout"),
 		    entries: &[
 			wgpu::BindGroupLayoutEntry {
 			    binding: 0,
 			    visibility: wgpu::ShaderStages::VERTEX,
 			    ty: wgpu::BindingType::Buffer {
-				ty: wgpu::BufferBindingType::Uniform,
+				ty: wgpu::BufferBindingType::Storage {
+				    read_only: true,
+				},
 				has_dynamic_offset: false,
 				min_binding_size: None,
 			    },
@@ -108,15 +121,15 @@ impl GraphicsContext {
 		}
 	    );
 
-	let uniform_bg =
+	let bind_group =
 	    device.create_bind_group(
 		&wgpu::BindGroupDescriptor {
-		    label: Some("Model Uniform Bind Group"),
-		    layout: &uniform_bglayout,
+		    label: Some("Bind Group"),
+		    layout: &bg_layout,
 		    entries: &[
 			wgpu::BindGroupEntry {
 			    binding: 0,
-			    resource: model_ubuf.as_entire_binding(),
+			    resource: model_sbuf.as_entire_binding(),
 			},
 		    ],
 		}
@@ -124,9 +137,25 @@ impl GraphicsContext {
 
 	let mesh_playout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 	    label: Some("Mesh pipeline layout"),
-	    bind_group_layouts: &[Some(&uniform_bglayout)],
+	    bind_group_layouts: &[Some(&bg_layout)],
 	    immediate_size: 0,
 	});
+	
+	let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+	    label: Some("Depth Texture"),
+	    size: wgpu::Extent3d {
+		width: window_size.width,
+		height: window_size.height,
+		depth_or_array_layers: 1,
+	    },
+	    mip_level_count: 1,
+	    sample_count: 1,
+	    dimension: wgpu::TextureDimension::D2,
+	    format: wgpu::TextureFormat::Depth32Float,
+	    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+	    view_formats: &[],
+	});
+	let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
 	let mesh_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 	    label: Some("Mesh pipeline"),
@@ -149,7 +178,13 @@ impl GraphicsContext {
 	    primitive: wgpu::PrimitiveState::default(),
 	    multisample: wgpu::MultisampleState::default(),
 	    multiview_mask: None,
-	    depth_stencil: None,
+	    depth_stencil: Some(wgpu::DepthStencilState {
+		format: wgpu::TextureFormat::Depth32Float,
+		depth_write_enabled: Some(true),
+		depth_compare: Some(wgpu::CompareFunction::Less),
+		stencil: wgpu::StencilState::default(),
+		bias: wgpu::DepthBiasState::default(),
+	    }),
 	    cache: None,
 	});
 
@@ -163,8 +198,9 @@ impl GraphicsContext {
 	    surface_config,
 	    surface_caps: caps,
 	    mesh_pipeline,
-	    model_ubuf,
-	    uniform_bg,
+	    model_sbuf,
+	    bind_group,
+	    depth_view,
 	})
     }
     
@@ -173,5 +209,24 @@ impl GraphicsContext {
 	    &self.device,
 	    &self.surface_config,
 	);
+    }
+
+    pub fn recreate_depth(&mut self, width: u32, height: u32) {
+	let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+	    label: Some("Depth Texture"),
+	    size: wgpu::Extent3d {
+		width: width,
+		height: height,
+		depth_or_array_layers: 1,
+	    },
+	    mip_level_count: 1,
+	    sample_count: 1,
+	    dimension: wgpu::TextureDimension::D2,
+	    format: wgpu::TextureFormat::Depth32Float,
+	    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+	    view_formats: &[],
+	});
+
+	self.depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 }
