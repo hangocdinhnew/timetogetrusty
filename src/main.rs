@@ -51,16 +51,25 @@ impl Default for App {
     }
 }
 
-const VERTICES_SQUARE: [f32; 3*4] = [
-    -0.5, 0.0, 0.0, // A
-    0.5, 0.0, 0.0, // B
-    0.5, 0.5, 0.0, // C
-    -0.5, 0.5, 0.0, // D
+const VERTICES_SQUARE: [f32; 3*(4*2)] = [
+    -1.0, -1.0, -1.0,
+     1.0, -1.0, -1.0,
+     1.0,  1.0, -1.0,
+    -1.0,  1.0, -1.0,
+
+    -1.0, -1.0, 1.0,
+     1.0, -1.0, 1.0,
+     1.0,  1.0, 1.0,
+    -1.0,  1.0, 1.0
 ];
 
-const INDICES_SQUARE: [u32; 3*2] = [
-    0, 1, 3, // ABD
-    3, 2, 1 // DCB
+const INDICES_SQUARE: [u32; (3*6)*2] = [
+    0,1,2, 0,2,3,
+    4,6,5, 4,7,6,
+    0,5,1, 0,4,5,
+    3,2,6, 3,6,7,
+    0,3,7, 0,7,4,
+    1,5,6, 1,6,2
 ];
 
 impl ApplicationHandler for App {
@@ -84,17 +93,18 @@ impl ApplicationHandler for App {
 		return;
 	    },
 	};
-	
+
 	self.square = self.renderer
 	    .as_mut()
 	    .unwrap()
 	    .upload_mesh(&VERTICES_SQUARE, &INDICES_SQUARE);
+
+	self.first_square_transform = glam::Mat4::from_scale(glam::Vec3::new(0.5, 0.5, 0.5));
     }
     
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
 	let window = self.window.as_mut().unwrap();
 	let renderer = self.renderer.as_mut().unwrap();
-
 	
 	match event {
             WindowEvent::CloseRequested => {
@@ -140,8 +150,8 @@ impl ApplicationHandler for App {
 		
 		self.frames += 1;
 
-		self.first_square_transform *= glam::Mat4::from_rotation_x((6.0_f32).to_radians() * self.dt);
-		
+		self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * self.dt);
+
 		if self.fps_timer.elapsed().as_secs_f32() >= 1.0 {
 		    let fps =
 			self.frames as f32 /
