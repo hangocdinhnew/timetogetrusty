@@ -7,11 +7,18 @@ use wgpu::{
     Instance, InstanceDescriptor,
     Adapter, RequestAdapterOptions, Device, DeviceDescriptor, Queue,
     Surface, SurfaceCapabilities, SurfaceConfiguration, PresentMode, TextureUsages,
-    Buffer, BufferUsages, BufferDescriptor,
-    BindGroup, RenderPipeline, Texture,
+    BufferUsages, BufferDescriptor,
+    RenderPipeline,
 };
 
 use std::sync::Arc;
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ViewProjection {
+    pub view: glam::Mat4,
+    pub projection: glam::Mat4,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -30,8 +37,11 @@ pub struct GraphicsContext {
     pub surface_caps: SurfaceCapabilities,
     pub mesh_pipeline: RenderPipeline,
     pub model_sbuf: wgpu::Buffer,
+    pub bg_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
     pub depth_view: wgpu::TextureView,
+    pub model_sbuf_size: usize,
+    pub camera_ubuf: wgpu::Buffer,
 }
 
 pub const VERTEX_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
@@ -89,7 +99,7 @@ impl GraphicsContext {
 
 	let model_sbuf = device.create_buffer(&BufferDescriptor {
 	    label: None,
-	    size: (size_of::<MeshInstance>() as u64) * 256,
+	    size: (size_of::<MeshInstance>() as u64) * 128,
 	    usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
 	    mapped_at_creation: false,
 	});
@@ -99,6 +109,20 @@ impl GraphicsContext {
 	};
 
 	queue.write_buffer(&model_sbuf, 0, bytemuck::bytes_of(&mesh_instance));
+
+	let camera_ubuf = device.create_buffer(&BufferDescriptor {
+	    label: None,
+	    size: size_of::<ViewProjection>() as u64,
+	    usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM,
+	    mapped_at_creation: false,
+	});
+
+	let view_projection = ViewProjection {
+	    view: glam::Mat4::IDENTITY,
+	    projection: glam::Mat4::IDENTITY,
+	};
+	
+	queue.write_buffer(&camera_ubuf, 0, bytemuck::bytes_of(&view_projection));
 
 	let bg_layout =
 	    device.create_bind_group_layout(
@@ -117,6 +141,16 @@ impl GraphicsContext {
 			    },
 			    count: None,
 			},
+			wgpu::BindGroupLayoutEntry {
+			    binding: 1,
+			    visibility: wgpu::ShaderStages::VERTEX,
+			    ty: wgpu::BindingType::Buffer {
+				ty: wgpu::BufferBindingType::Uniform,
+				has_dynamic_offset: false,
+				min_binding_size: None,
+			    },
+			    count: None,
+			},
 		    ],
 		}
 	    );
@@ -130,6 +164,10 @@ impl GraphicsContext {
 			wgpu::BindGroupEntry {
 			    binding: 0,
 			    resource: model_sbuf.as_entire_binding(),
+			},
+			wgpu::BindGroupEntry {
+			    binding: 1,
+			    resource: camera_ubuf.as_entire_binding(),
 			},
 		    ],
 		}
@@ -199,8 +237,11 @@ impl GraphicsContext {
 	    surface_caps: caps,
 	    mesh_pipeline,
 	    model_sbuf,
+	    bg_layout,
 	    bind_group,
 	    depth_view,
+	    model_sbuf_size: size_of::<MeshInstance>() * 128,
+	    camera_ubuf,
 	})
     }
     
@@ -228,5 +269,31 @@ impl GraphicsContext {
 	});
 
 	self.depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    }
+    
+    pub fn recreate_model_sbuf(&mut self) {
+	self.model_sbuf = self.device.create_buffer(&BufferDescriptor {
+	    label: None,
+	    size: self.model_sbuf_size as u64,
+	    usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
+	    mapped_at_creation: false,
+	});
+
+	self.bind_group = self.device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+		label: Some("Bind Group"),
+		layout: &self.bg_layout,
+		entries: &[
+                    wgpu::BindGroupEntry {
+			binding: 0,
+			resource: self.model_sbuf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+			binding: 1,
+			resource: self.camera_ubuf.as_entire_binding(),
+                    },
+		],
+            },
+	);
     }
 }

@@ -13,6 +13,10 @@ use winit::{
 mod graphics_context;
 pub use graphics_context::MeshInstance;
 use graphics_context::GraphicsContext;
+use graphics_context::ViewProjection;
+
+pub mod camera;
+pub use camera::Camera;
 
 struct Mesh {
     vertices_buf: wgpu::Buffer,
@@ -21,7 +25,7 @@ struct Mesh {
 }
 
 pub enum RenderCommand {
-    Mesh { id: MeshID, transform: glam::Mat4 },
+    Mesh { id: MeshID },
 }
 
 pub struct Renderer {
@@ -29,6 +33,7 @@ pub struct Renderer {
     commands: Vec<RenderCommand>,
     meshes: Vec<Mesh>,
     batches: HashMap<MeshID, Vec<MeshInstance>>,
+    last_camera: Camera,
 }
 
 pub type MeshID = usize;
@@ -42,6 +47,13 @@ impl Renderer {
 	    commands: Vec::new(),
 	    meshes: Vec::new(),
 	    batches: HashMap::new(),
+	    last_camera: Camera {
+		position: glam::Vec3::ZERO,
+		yaw: 0.0,
+		pitch: 0.0,
+		fov: 0.0,
+		draw_distance: 0.0,
+	    },
 	})
     }
 
@@ -75,23 +87,42 @@ impl Renderer {
     pub fn submit_mesh(&mut self, id: MeshID, transform: glam::Mat4) {
 	self.commands.push(RenderCommand::Mesh {
 	    id,
-	    transform,
 	});
+
+	let mesh_instance = MeshInstance {
+	    model: transform,
+	};
+
+	self.batches
+	    .entry(id)
+	    .or_default()
+	    .push(mesh_instance);
     }
 
-    pub fn draw(&mut self) {
+    pub fn draw(&mut self, camera: Camera) {
 	let surface_texture = match self.gfx.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => texture,
 
-            wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => return,
+            wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => {
+		self.batches.clear();
+		self.commands.clear();
+
+		return;
+	    },
 
             wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+		self.batches.clear();
+		self.commands.clear();
+		
                 drop(texture);
                 self.gfx.reconfigure_surface();
 		return;
             }
 
             wgpu::CurrentSurfaceTexture::Outdated => {
+		self.batches.clear();
+		self.commands.clear();
+		
                 self.gfx.reconfigure_surface();
 		return;
             }
@@ -101,6 +132,9 @@ impl Renderer {
             }
 
             wgpu::CurrentSurfaceTexture::Lost => {
+		self.batches.clear();
+		self.commands.clear();
+		
                 self.gfx.surface = self.gfx.instance.create_surface(self.gfx.window.clone()).unwrap();
                 self.gfx.reconfigure_surface();
 		return;
@@ -143,37 +177,60 @@ impl Renderer {
 	    renderpass.set_pipeline(&self.gfx.mesh_pipeline);
 
 	    for command in &self.commands {
-		if let RenderCommand::Mesh {id, transform} = command {
-		    let id = *id;
-		    let mesh = &self.meshes[id];
+	    	match command {
+	    	    RenderCommand::Mesh { id } => {
+			let id = *id;
+			let mesh = &self.meshes[id];
+	    		let instances = self.batches
+	    		    .get(&id)
+	    		    .expect("MeshID is invalid, this is a bug!");
 
-		    let mesh_instance = MeshInstance {
-			model: *transform,
-		    };
+			let required_size = instances.len() * size_of::<MeshInstance>();
+			
+			if required_size <= self.gfx.model_sbuf_size {
+			    self.gfx.queue.write_buffer(
+				&self.gfx.model_sbuf,
+				0,
+				bytemuck::cast_slice(instances),
+			    );
+			} else {
+			    self.gfx.model_sbuf_size = required_size.next_power_of_two();
+			    self.gfx.recreate_model_sbuf();
+			    
+			    self.gfx.queue.write_buffer(
+				&self.gfx.model_sbuf,
+				0,
+				bytemuck::cast_slice(instances),
+			    );
+			    
+			    tracing::debug!("Triggered: recreate buffer with size: {}", required_size.next_power_of_two());
+			}
 
-		    self.batches
-			.entry(id)
-			.or_default()
-			.push(mesh_instance);
-		}
+			if self.last_camera != camera {
+			    let projection = glam::Mat4::perspective_rh(camera.fov.to_radians(),
+									self.gfx.surface_config.width as f32 / self.gfx.surface_config.height as f32,
+									0.1,
+									camera.draw_distance);
+
+			    let view_projection = ViewProjection {
+				view: camera.view(),
+				projection,
+			    };
+			    
+			    self.gfx.queue.write_buffer(&self.gfx.camera_ubuf, 0, bytemuck::bytes_of(&view_projection));
+
+			    self.last_camera = camera;
+			}
+			
+			renderpass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
+			renderpass.set_index_buffer(mesh.indices_buf.slice(..), wgpu::IndexFormat::Uint32);
+			renderpass.set_bind_group(0, &self.gfx.bind_group, &[]);
+			
+			renderpass.draw_indexed(0..mesh.index_count, 0, 0..(instances.len() as u32));
+	    	    }
+	    	}
 	    }
 
-	    for (id, instances) in &self.batches {
-		let id = *id;
-		let mesh = &self.meshes[id];
-
-		self.gfx.queue.write_buffer(
-		    &self.gfx.model_sbuf,
-		    0,
-		    bytemuck::cast_slice(instances),
-		);
-
-		renderpass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
-		renderpass.set_index_buffer(mesh.indices_buf.slice(..), wgpu::IndexFormat::Uint32);
-		renderpass.set_bind_group(0, &self.gfx.bind_group, &[]);
-
-		renderpass.draw_indexed(0..mesh.index_count, 0, 0..(instances.len() as u32));
-	    }
 	}
 
 	self.gfx.queue.submit(Some(encoder.finish()));
@@ -191,11 +248,18 @@ impl Renderer {
 	self.gfx.surface_config.width = width;
 	self.gfx.surface_config.height = height;
 
-	self.gfx.surface.configure(
-	    &self.gfx.device,
-	    &self.gfx.surface_config,
-	);
+	self.gfx.reconfigure_surface();
 
 	self.gfx.recreate_depth(width, height);
+    }
+
+    pub fn set_vsync(&mut self, is_vsync: bool) {
+	if is_vsync {
+	    self.gfx.surface_config.present_mode = wgpu::PresentMode::AutoVsync;
+	} else {
+	    self.gfx.surface_config.present_mode = wgpu::PresentMode::AutoNoVsync;
+	}
+
+	self.gfx.reconfigure_surface();
     }
 }
