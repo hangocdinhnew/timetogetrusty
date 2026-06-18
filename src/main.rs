@@ -16,10 +16,13 @@ use winit::{
 use tracing::{info, error};
 use tracing_subscriber::EnvFilter;
 
-pub mod renderer;
+mod renderer;
 use renderer::Renderer;
 use renderer::MeshID;
 use renderer::Camera;
+
+mod clock;
+use clock::DeltaClock;
 
 pub struct App {
     window: Option<Arc<Window>>,
@@ -27,10 +30,7 @@ pub struct App {
     square: MeshID,
     first_square_transform: glam::Mat4,
     camera: Camera,
-    frames: u32,
-    last_frame: Instant,
-    fps_timer: Instant,
-    dt: f32,
+    delta: DeltaClock,
     pressed_keys: HashSet<KeyCode>,
 }
 
@@ -41,10 +41,7 @@ impl Default for App {
 	    renderer: None,
 	    square: 0,
 	    first_square_transform: glam::Mat4::IDENTITY,
-	    frames: 0,
-	    dt: 0.0,
-	    last_frame: Instant::now(),
-	    fps_timer: Instant::now(),
+	    delta: DeltaClock::default(),
 	    camera: Camera::default(),
 	    pressed_keys: HashSet::new(),
 	}
@@ -122,12 +119,10 @@ impl ApplicationHandler for App {
 		window.request_redraw();
             },
             WindowEvent::RedrawRequested => {
-		let now = Instant::now();
+		self.delta.clock();
 		
-		self.dt = (now - self.last_frame).as_secs_f32();
-		self.last_frame = now;
-		
-		let speed = self.dt * 5.0;
+		let dt = self.delta.get_dt();
+		let speed = dt * 5.0;
 		
 		for key in &self.pressed_keys {
 		    match *key {
@@ -145,7 +140,7 @@ impl ApplicationHandler for App {
 		    }
 		}
 
-		self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * self.dt);
+		self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * dt);
 
 		for i in 0..10 {
 		    renderer.add_mesh_instances(self.square, self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0)));
@@ -153,19 +148,6 @@ impl ApplicationHandler for App {
 		renderer.submit_mesh(self.square);
 		
 		renderer.draw(self.camera);
-		
-		self.frames += 1;
-
-		if self.fps_timer.elapsed().as_secs_f32() >= 1.0 {
-		    let fps =
-			self.frames as f32 /
-			self.fps_timer.elapsed().as_secs_f32();
-		    
-		    println!("FPS: {:.2}", fps);
-		    
-		    self.frames = 0;
-		    self.fps_timer = Instant::now();
-		}
 		
                 window.request_redraw();
             },
