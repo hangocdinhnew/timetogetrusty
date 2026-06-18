@@ -70,8 +70,8 @@ const INDICES_SQUARE: [u32; (3*6)*2] = [
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-	let window_attributes = WindowAttributes::default();
-	
+        let window_attributes = WindowAttributes::default();
+        
         self.window = match event_loop.create_window(window_attributes) {
             Ok(window) => Some(Arc::new(window)),
             Err(err) => {
@@ -80,88 +80,88 @@ impl ApplicationHandler for App {
                 return;
             },
         };
-	
-	self.renderer = match Renderer::new(event_loop.owned_display_handle(), self.window.clone().unwrap().clone()) {
-	    Ok(renderer) => Some(renderer),
-	    Err(err) => {
-		error!("Error while creating renderer! Reason: {err}");
-		event_loop.exit();
-		return;
-	    },
-	};
         
-	self.renderer
-	    .as_mut()
-	    .unwrap()
-	    .set_vsync(false);
+        self.renderer = match Renderer::new(event_loop.owned_display_handle(), self.window.clone().unwrap().clone()) {
+            Ok(renderer) => Some(renderer),
+            Err(err) => {
+	        error!("Error while creating renderer! Reason: {err}");
+	        event_loop.exit();
+	        return;
+            },
+        };
         
-	self.square = self.renderer
-	    .as_mut()
-	    .unwrap()
-	    .upload_mesh(&VERTICES_SQUARE, &INDICES_SQUARE);
+        self.renderer
+            .as_mut()
+            .unwrap()
+            .set_vsync(false);
         
-	self.first_square_transform = glam::Mat4::from_scale(glam::Vec3::new(0.5, 0.5, 0.5));
+        self.square = self.renderer
+            .as_mut()
+            .unwrap()
+            .upload_mesh(&VERTICES_SQUARE, &INDICES_SQUARE);
+        
+        self.first_square_transform = glam::Mat4::from_scale(glam::Vec3::new(0.5, 0.5, 0.5));
     }
     
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-	let window = self.window.as_mut().unwrap();
-	let renderer = self.renderer.as_mut().unwrap();
-	
-	match event {
+        let window = self.window.as_mut().unwrap();
+        let renderer = self.renderer.as_mut().unwrap();
+        
+        match event {
             WindowEvent::CloseRequested => {
                 info!("Close was requested; stopping");
                 event_loop.exit();
             },
             WindowEvent::Resized(size) => {
-		renderer.resize(size.width, size.height);
-		
-		window.request_redraw();
+	        renderer.resize(size.width, size.height);
+	        
+	        window.request_redraw();
             },
             WindowEvent::RedrawRequested => {
-		self.delta.clock();
-		
-		let dt = self.delta.get_dt();
-		let speed = dt * 5.0;
-		
-		for key in &self.pressed_keys {
-		    match *key {
-			KeyCode::KeyW => self.camera.move_with(0.0, 0.0, speed),
-			KeyCode::KeyS => self.camera.move_with(0.0, 0.0, -speed),
-			KeyCode::KeyA => self.camera.move_with(-speed, 0.0, 0.0),
-			KeyCode::KeyD => self.camera.move_with(speed, 0.0, 0.0),
-			KeyCode::KeyE => self.camera.move_with(0.0, speed, 0.0),
-			KeyCode::KeyQ => self.camera.move_with(0.0, -speed, 0.0),
-			KeyCode::ArrowUp => self.camera.pitch += speed * 25.0,
-			KeyCode::ArrowDown => self.camera.pitch += -speed * 25.0,
-			KeyCode::ArrowLeft => self.camera.yaw += -speed * 25.0,
-			KeyCode::ArrowRight => self.camera.yaw += speed * 25.0,
-			_ => {},
-		    }
-		}
+	        self.delta.clock();
+	        
+	        let dt = self.delta.get_dt();
+	        let speed = dt * 5.0;
+	        
+	        for key in &self.pressed_keys {
+	            match *key {
+		        KeyCode::KeyW => self.camera.move_with(0.0, 0.0, speed),
+		        KeyCode::KeyS => self.camera.move_with(0.0, 0.0, -speed),
+		        KeyCode::KeyA => self.camera.move_with(-speed, 0.0, 0.0),
+		        KeyCode::KeyD => self.camera.move_with(speed, 0.0, 0.0),
+		        KeyCode::KeyE => self.camera.move_with(0.0, speed, 0.0),
+		        KeyCode::KeyQ => self.camera.move_with(0.0, -speed, 0.0),
+		        KeyCode::ArrowUp => self.camera.pitch += speed * 25.0,
+		        KeyCode::ArrowDown => self.camera.pitch += -speed * 25.0,
+		        KeyCode::ArrowLeft => self.camera.yaw += -speed * 25.0,
+		        KeyCode::ArrowRight => self.camera.yaw += speed * 25.0,
+		        _ => {},
+	            }
+	        }
                 
-		self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * dt);
+	        self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * dt);
                 
-		for i in 0..10 {
-		    renderer.add_mesh_instances(self.square, self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0)));
-		}
-		renderer.submit_mesh(self.square);
-		
-		renderer.draw(self.camera);
-		
+	        for i in 0..10 {
+	            renderer.add_mesh_instances(self.square, self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0)));
+	        }
+	        renderer.submit_mesh(self.square);
+	        
+	        renderer.draw(self.camera);
+	        
                 window.request_redraw();
             },
-	    WindowEvent::KeyboardInput {event, ..} => {
-		if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
-		    match event.state {
-			winit::event::ElementState::Pressed => {
-			    self.pressed_keys.insert(code);
-			}
-			winit::event::ElementState::Released => {
-			    self.pressed_keys.remove(&code);
-			}
-		    }
-		}
-	    }
+            WindowEvent::KeyboardInput {event, ..} => {
+	        if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
+	            match event.state {
+		        winit::event::ElementState::Pressed => {
+		            self.pressed_keys.insert(code);
+		        }
+		        winit::event::ElementState::Released => {
+		            self.pressed_keys.remove(&code);
+		        }
+	            }
+	        }
+            }
             _ => (),
         }
     }
