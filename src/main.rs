@@ -1,7 +1,6 @@
 use std::{
     sync::Arc,
     io::IsTerminal,
-    time::Instant,
     collections::HashSet,
 };
 
@@ -10,7 +9,7 @@ use winit::{
     application::ApplicationHandler,
     event::{WindowEvent},
     window::{Window, WindowId, WindowAttributes},
-    keyboard::{KeyCode, PhysicalKey}
+    keyboard::{KeyCode}
 };
 
 use tracing::{info, error};

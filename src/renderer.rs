@@ -1,22 +1,38 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use wgpu::{
-    BufferUsages, BufferDescriptor,
-};
-
 use winit::{
     window::Window,
     event_loop::OwnedDisplayHandle
 };
 
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MeshInstance {
+    pub model: glam::Mat4,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ViewProjection {
+    pub view: glam::Mat4,
+    pub projection: glam::Mat4,
+}
+
 mod graphics_context;
-pub use graphics_context::MeshInstance;
 use graphics_context::GraphicsContext;
-use graphics_context::ViewProjection;
 
 pub mod camera;
 pub use camera::Camera;
+
+mod pipeline;
+use pipeline::{PipelineManager, PipelineType};
+
+mod buffer;
+use buffer::{BufferManager, BufferType, BgType};
+
+mod pass;
+use pass::{CurrentRenderFrame, RenderFrame};
 
 struct Mesh {
     vertices_buf: wgpu::Buffer,
@@ -30,6 +46,8 @@ pub enum RenderCommand {
 
 pub struct Renderer {
     gfx: GraphicsContext,
+    buffer: BufferManager,
+    pipeline: PipelineManager,
     commands: Vec<RenderCommand>,
     meshes: Vec<Mesh>,
     batches: HashMap<MeshID, Vec<MeshInstance>>,
@@ -41,9 +59,13 @@ pub type MeshID = usize;
 impl Renderer {
     pub fn new(display: OwnedDisplayHandle, window: Arc<Window>) -> anyhow::Result<Self> {
 	let gfx = GraphicsContext::new(display, window)?;
+	let buffer = BufferManager::new(&gfx);
+	let pipeline = PipelineManager::new(&gfx, &buffer);
 
 	Ok(Self {
 	    gfx,
+	    buffer,
+	    pipeline,
 	    commands: Vec::new(),
 	    meshes: Vec::new(),
 	    batches: HashMap::new(),
@@ -58,22 +80,11 @@ impl Renderer {
     }
 
     pub fn upload_mesh(&mut self, vertices: &[f32], indices: &[u32]) -> MeshID {
-	let vertices_buf = self.gfx.device.create_buffer(&BufferDescriptor {
-	    label: None,
-	    size: std::mem::size_of_val(vertices) as u64,
-	    usage: BufferUsages::COPY_DST | BufferUsages::VERTEX,
-	    mapped_at_creation: false,
-	});
+	let vertices_buf = self.gfx.create_vertex_buffer(std::mem::size_of_val(vertices) as u64);
+	let indices_buf = self.gfx.create_index_buffer(std::mem::size_of_val(indices) as u64);
 
-	let indices_buf = self.gfx.device.create_buffer(&BufferDescriptor {
-	    label: None,
-	    size: std::mem::size_of_val(indices) as u64,
-	    usage: BufferUsages::COPY_DST | BufferUsages::INDEX,
-	    mapped_at_creation: false,
-	});
-
-	self.gfx.queue.write_buffer(&vertices_buf, 0, bytemuck::cast_slice(vertices));
-	self.gfx.queue.write_buffer(&indices_buf, 0, bytemuck::cast_slice(indices));
+	self.gfx.write_buf(&vertices_buf, bytemuck::cast_slice(vertices));
+	self.gfx.write_buf(&indices_buf, bytemuck::cast_slice(indices));
 
 	self.meshes.push(Mesh {
 	    vertices_buf,
@@ -102,141 +113,91 @@ impl Renderer {
     }
 
     pub fn draw(&mut self, camera: Camera) {
-	let surface_texture = match self.gfx.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(texture) => texture,
+	let mut frame = match RenderFrame::begin(&self.gfx) {
+	    CurrentRenderFrame::Success(pass) => pass,
+	    CurrentRenderFrame::Timeout | CurrentRenderFrame::Occluded => {
+		self.batches.clear();
+		self.commands.clear();
 
-            wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => {
+		return;
+	    }
+
+	    CurrentRenderFrame::Suboptimal | CurrentRenderFrame::Outdated => {
+		self.gfx.reconfigure_surface();
+		
 		self.batches.clear();
 		self.commands.clear();
 
 		return;
 	    },
 
-            wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+	    CurrentRenderFrame::Lost => {
+		self.gfx.recreate_surface();
+		self.gfx.reconfigure_surface();
+
 		self.batches.clear();
 		self.commands.clear();
 		
-                drop(texture);
-                self.gfx.reconfigure_surface();
 		return;
-            }
+	    },
 
-            wgpu::CurrentSurfaceTexture::Outdated => {
-		self.batches.clear();
-		self.commands.clear();
-		
-                self.gfx.reconfigure_surface();
-		return;
-            }
-
-            wgpu::CurrentSurfaceTexture::Validation => {
-                unreachable!()
-            }
-
-            wgpu::CurrentSurfaceTexture::Lost => {
-		self.batches.clear();
-		self.commands.clear();
-		
-                self.gfx.surface = self.gfx.instance.create_surface(self.gfx.window.clone()).unwrap();
-                self.gfx.reconfigure_surface();
-		return;
-            }
-        };
-
-	let texture_view = surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor {
-                format: Some(self.gfx.surface_caps.formats[0].add_srgb_suffix()),
-                ..Default::default()
-            });
-
-	let mut encoder = self.gfx.device.create_command_encoder(&Default::default());
+	    CurrentRenderFrame::Validation => unreachable!(),
+	};
+	
 	{
-            let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-		label: None,
-		color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &texture_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-			load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-			store: wgpu::StoreOp::Store,
-                    },
-		})],
-		depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-		    view: &self.gfx.depth_view,
-		    depth_ops: Some(wgpu::Operations {
-			load: wgpu::LoadOp::Clear(1.0),
-			store: wgpu::StoreOp::Store,
-		    }),
-		    stencil_ops: None,
-		}),
-		timestamp_writes: None,
-		occlusion_query_set: None,
-		multiview_mask: None,
-            });
-
-	    renderpass.set_pipeline(&self.gfx.mesh_pipeline);
-
+	    let mut pass = frame.begin_pass(&self.gfx);
+	    
+	    pass.set_pipeline(&self.pipeline, PipelineType::Mesh);
+	    
 	    for command in &self.commands {
-	    	match command {
+		match command {
 	    	    RenderCommand::Mesh { id } => {
 			let id = *id;
 			let mesh = &self.meshes[id];
 	    		let instances = self.batches
 	    		    .get(&id)
 	    		    .expect("MeshID is invalid, this is a bug!");
-
+			
 			let required_size = instances.len() * size_of::<MeshInstance>();
 			
-			if required_size <= self.gfx.model_sbuf_size {
-			    self.gfx.queue.write_buffer(
-				&self.gfx.model_sbuf,
-				0,
-				bytemuck::cast_slice(instances),
-			    );
+			if required_size <= self.buffer.model_sbuf_size {
+			    self.buffer.write_buf(&self.gfx, BufferType::Model, bytemuck::cast_slice(instances));
 			} else {
-			    self.gfx.model_sbuf_size = required_size.next_power_of_two();
-			    self.gfx.recreate_model_sbuf();
+			    self.buffer.model_sbuf_size = required_size.next_power_of_two();
+			    self.buffer.recreate_model_sbuf(&self.gfx);
 			    
-			    self.gfx.queue.write_buffer(
-				&self.gfx.model_sbuf,
-				0,
-				bytemuck::cast_slice(instances),
-			    );
+			    self.buffer.write_buf(&self.gfx, BufferType::Model, bytemuck::cast_slice(instances));
 			    
 			    tracing::debug!("Triggered: recreate buffer with size: {}", required_size.next_power_of_two());
 			}
-
+			
 			if self.last_camera != camera {
 			    let projection = glam::Mat4::perspective_rh(camera.fov.to_radians(),
 									self.gfx.surface_config.width as f32 / self.gfx.surface_config.height as f32,
 									0.1,
 									camera.draw_distance);
-
+			    
 			    let view_projection = ViewProjection {
 				view: camera.view(),
 				projection,
 			    };
 			    
-			    self.gfx.queue.write_buffer(&self.gfx.camera_ubuf, 0, bytemuck::bytes_of(&view_projection));
-
+			    self.buffer.write_buf(&self.gfx, BufferType::Camera, bytemuck::bytes_of(&view_projection));
+			    
 			    self.last_camera = camera;
 			}
 			
-			renderpass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
-			renderpass.set_index_buffer(mesh.indices_buf.slice(..), wgpu::IndexFormat::Uint32);
-			renderpass.set_bind_group(0, &self.gfx.bind_group, &[]);
+			pass.set_vertex_buffer(&mesh.vertices_buf);
+			pass.set_index_buffer(&mesh.indices_buf);
+			pass.set_bind_group(&self.buffer, BgType::Mesh);
 			
-			renderpass.draw_indexed(0..mesh.index_count, 0, 0..(instances.len() as u32));
+			pass.draw_indexed(0..mesh.index_count, 0, 0..(instances.len() as u32));
 	    	    }
-	    	}
+		}
 	    }
-
 	}
 
-	self.gfx.queue.submit(Some(encoder.finish()));
-	surface_texture.present();
+	frame.end(&self.gfx);
 
 	self.batches.clear();
 	self.commands.clear();
