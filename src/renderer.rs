@@ -70,11 +70,11 @@ impl Renderer {
             meshes: Vec::new(),
             batches: HashMap::new(),
             last_camera: Camera {
-	        position: glam::Vec3::ZERO,
-	        yaw: 0.0,
-	        pitch: 0.0,
-	        fov: 0.0,
-	        draw_distance: 0.0,
+                position: glam::Vec3::ZERO,
+                yaw: 0.0,
+                pitch: 0.0,
+                fov: 0.0,
+                draw_distance: 0.0,
             },
         })
     }
@@ -116,29 +116,29 @@ impl Renderer {
         let mut frame = match RenderFrame::begin(&self.gfx) {
             CurrentRenderFrame::Success(pass) => pass,
             CurrentRenderFrame::Timeout | CurrentRenderFrame::Occluded => {
-	        self.batches.clear();
-	        self.commands.clear();
+                self.batches.clear();
+                self.commands.clear();
                 
-	        return;
+                return;
             }
             
             CurrentRenderFrame::Suboptimal | CurrentRenderFrame::Outdated => {
-	        self.gfx.reconfigure_surface();
-	        
-	        self.batches.clear();
-	        self.commands.clear();
+                self.gfx.reconfigure_surface();
                 
-	        return;
+                self.batches.clear();
+                self.commands.clear();
+                
+                return;
             },
             
             CurrentRenderFrame::Lost => {
-	        self.gfx.recreate_surface();
-	        self.gfx.reconfigure_surface();
+                self.gfx.recreate_surface();
+                self.gfx.reconfigure_surface();
                 
-	        self.batches.clear();
-	        self.commands.clear();
-	        
-	        return;
+                self.batches.clear();
+                self.commands.clear();
+                
+                return;
             },
             
             CurrentRenderFrame::Validation => unreachable!(),
@@ -150,50 +150,50 @@ impl Renderer {
             pass.set_pipeline(&self.pipeline, PipelineType::Mesh);
             
             for command in &self.commands {
-	        match command {
-    	            RenderCommand::Mesh { id } => {
-		        let id = *id;
-		        let mesh = &self.meshes[id];
-    		        let instances = self.batches
-    		            .get(&id)
-    		            .expect("MeshID is invalid, this is a bug!");
-		        
-		        let required_size = instances.len() * size_of::<MeshInstance>();
-		        
-		        if required_size <= self.buffer.model_sbuf_size {
-		            self.buffer.write_buf(&self.gfx, BufferType::Model, bytemuck::cast_slice(instances));
-		        } else {
-		            self.buffer.model_sbuf_size = required_size.next_power_of_two();
-		            self.buffer.recreate_model_sbuf(&self.gfx);
-		            
-		            self.buffer.write_buf(&self.gfx, BufferType::Model, bytemuck::cast_slice(instances));
-		            
-		            tracing::debug!("Triggered: recreate buffer with size: {}", required_size.next_power_of_two());
-		        }
-		        
-		        if self.last_camera != camera {
-		            let projection = glam::Mat4::perspective_rh(camera.fov.to_radians(),
-								        self.gfx.surface_config.width as f32 / self.gfx.surface_config.height as f32,
-								        0.1,
-								        camera.draw_distance);
-		            
-		            let view_projection = ViewProjection {
-			        view: camera.view(),
-			        projection,
-		            };
-		            
-		            self.buffer.write_buf(&self.gfx, BufferType::Camera, bytemuck::bytes_of(&view_projection));
-		            
-		            self.last_camera = camera;
-		        }
-		        
-		        pass.set_vertex_buffer(&mesh.vertices_buf);
-		        pass.set_index_buffer(&mesh.indices_buf);
-		        pass.set_bind_group(&self.buffer, BgType::Mesh);
-		        
-		        pass.draw_indexed(0..mesh.index_count, 0, 0..(instances.len() as u32));
-    	            }
-	        }
+                match command {
+                    RenderCommand::Mesh { id } => {
+                        let id = *id;
+                        let mesh = &self.meshes[id];
+                        let instances = self.batches
+                            .get(&id)
+                            .expect("MeshID is invalid, this is a bug!");
+                        
+                        let required_size = instances.len() * size_of::<MeshInstance>();
+                        
+                        if required_size <= self.buffer.model_sbuf_size {
+                            self.buffer.write_buf(&self.gfx, BufferType::Model, bytemuck::cast_slice(instances));
+                        } else {
+                            self.buffer.model_sbuf_size = required_size.next_power_of_two();
+                            self.buffer.recreate_model_sbuf(&self.gfx);
+                            
+                            self.buffer.write_buf(&self.gfx, BufferType::Model, bytemuck::cast_slice(instances));
+                            
+                            tracing::debug!("Triggered: recreate buffer with size: {}", required_size.next_power_of_two());
+                        }
+                        
+                        if self.last_camera != camera {
+                            let projection = glam::Mat4::perspective_rh(camera.fov.to_radians(),
+                                                                        self.gfx.surface_config.width as f32 / self.gfx.surface_config.height as f32,
+                                                                        0.1,
+                                                                        camera.draw_distance);
+                            
+                            let view_projection = ViewProjection {
+                                view: camera.view(),
+                                projection,
+                            };
+                            
+                            self.buffer.write_buf(&self.gfx, BufferType::Camera, bytemuck::bytes_of(&view_projection));
+                            
+                            self.last_camera = camera;
+                        }
+                        
+                        pass.set_vertex_buffer(&mesh.vertices_buf);
+                        pass.set_index_buffer(&mesh.indices_buf);
+                        pass.set_bind_group(&self.buffer, BgType::Mesh);
+                        
+                        pass.draw_indexed(0..mesh.index_count, 0, 0..(instances.len() as u32));
+                    }
+                }
             }
         }
         

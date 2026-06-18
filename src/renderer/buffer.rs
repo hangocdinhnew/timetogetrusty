@@ -51,48 +51,48 @@ impl BufferManager {
         
         let mesh_bg_layout = gfx.device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
-	        label: Some("Bind Group Layout"),
-	        entries: &[
-	            wgpu::BindGroupLayoutEntry {
-		        binding: 0,
-		        visibility: wgpu::ShaderStages::VERTEX,
-		        ty: wgpu::BindingType::Buffer {
-		            ty: wgpu::BufferBindingType::Storage {
-			        read_only: true,
-		            },
-		            has_dynamic_offset: false,
-		            min_binding_size: None,
-		        },
-		        count: None,
-	            },
-	            wgpu::BindGroupLayoutEntry {
-		        binding: 1,
-		        visibility: wgpu::ShaderStages::VERTEX,
-		        ty: wgpu::BindingType::Buffer {
-		            ty: wgpu::BufferBindingType::Uniform,
-		            has_dynamic_offset: false,
-		            min_binding_size: None,
-		        },
-		        count: None,
-	            },
-	        ],
+                label: Some("Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage {
+                                read_only: true,
+                            },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
             }
         );
         
         let mesh_bind_group = gfx.device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-	        label: Some("Bind Group"),
-	        layout: &mesh_bg_layout,
-	        entries: &[
-	            wgpu::BindGroupEntry {
-		        binding: 0,
-		        resource: model_sbuf.as_entire_binding(),
-	            },
-	            wgpu::BindGroupEntry {
-		        binding: 1,
-		        resource: camera_ubuf.as_entire_binding(),
-	            },
-	        ],
+                label: Some("Bind Group"),
+                layout: &mesh_bg_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: model_sbuf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: camera_ubuf.as_entire_binding(),
+                    },
+                ],
             }
         );
         
@@ -115,18 +115,18 @@ impl BufferManager {
         
         self.mesh_bind_group = gfx.device.create_bind_group(
             &wgpu::BindGroupDescriptor {
-	        label: Some("Bind Group"),
-	        layout: &self.mesh_bg_layout,
-	        entries: &[
+                label: Some("Bind Group"),
+                layout: &self.mesh_bg_layout,
+                entries: &[
                     wgpu::BindGroupEntry {
-		        binding: 0,
-		        resource: self.model_sbuf.as_entire_binding(),
+                        binding: 0,
+                        resource: self.model_sbuf.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
-		        binding: 1,
-		        resource: self.camera_ubuf.as_entire_binding(),
+                        binding: 1,
+                        resource: self.camera_ubuf.as_entire_binding(),
                     },
-	        ],
+                ],
             },
         );
     }

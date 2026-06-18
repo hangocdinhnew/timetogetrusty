@@ -59,17 +59,17 @@ impl RenderFrame {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-	            load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-	            store: wgpu::StoreOp::Store,
+                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-	        view: &gfx.depth_view,
-	        depth_ops: Some(wgpu::Operations {
-	            load: wgpu::LoadOp::Clear(1.0),
-	            store: wgpu::StoreOp::Store,
-	        }),
-	        stencil_ops: None,
+                view: &gfx.depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
             }),
             timestamp_writes: None,
             occlusion_query_set: None,

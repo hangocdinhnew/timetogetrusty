@@ -36,7 +36,7 @@ impl GraphicsContext {
         let (device, queue) = pollster::block_on(adapter.request_device(&device_descriptor))?;
         
         let surface = instance.create_surface(window
-				              .clone())?;
+                                              .clone())?;
         
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats[0];
@@ -63,9 +63,9 @@ impl GraphicsContext {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Depth Texture"),
             size: wgpu::Extent3d {
-	        width: window_size.width,
-	        height: window_size.height,
-	        depth_or_array_layers: 1,
+                width: window_size.width,
+                height: window_size.height,
+                depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -104,9 +104,9 @@ impl GraphicsContext {
         let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Depth Texture"),
             size: wgpu::Extent3d {
-	        width: width,
-	        height: height,
-	        depth_or_array_layers: 1,
+                width: width,
+                height: height,
+                depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
