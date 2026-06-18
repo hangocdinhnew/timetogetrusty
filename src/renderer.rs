@@ -84,15 +84,17 @@ impl Renderer {
 	return self.meshes.len() - 1;
     }
 
-    pub fn submit_mesh(&mut self, id: MeshID, transform: glam::Mat4) {
+    pub fn submit_mesh(&mut self, id: MeshID) {
 	self.commands.push(RenderCommand::Mesh {
 	    id,
 	});
+    }
 
+    pub fn add_mesh_instances(&mut self, id: MeshID, transform: glam::Mat4) {
 	let mesh_instance = MeshInstance {
 	    model: transform,
 	};
-
+	
 	self.batches
 	    .entry(id)
 	    .or_default()

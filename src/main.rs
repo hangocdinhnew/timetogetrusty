@@ -94,6 +94,11 @@ impl ApplicationHandler for App {
 	    },
 	};
 
+	self.renderer
+	    .as_mut()
+	    .unwrap()
+	    .set_vsync(false);
+
 	self.square = self.renderer
 	    .as_mut()
 	    .unwrap()
@@ -140,17 +145,16 @@ impl ApplicationHandler for App {
 		    }
 		}
 
+		self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * self.dt);
 
-		renderer.submit_mesh(
-		    self.square,
-		    self.first_square_transform
-		);
+		for i in 0..10 {
+		    renderer.add_mesh_instances(self.square, self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0)));
+		}
+		renderer.submit_mesh(self.square);
 		
 		renderer.draw(self.camera);
 		
 		self.frames += 1;
-
-		self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * self.dt);
 
 		if self.fps_timer.elapsed().as_secs_f32() >= 1.0 {
 		    let fps =
