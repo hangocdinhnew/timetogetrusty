@@ -52,7 +52,7 @@ impl PipelineManager {
 		compilation_options: Default::default(),
 		targets: &[Some(gfx.surface_caps.formats[0].into())],
 	    }),
-
+            
 	    primitive: wgpu::PrimitiveState::default(),
 	    multisample: wgpu::MultisampleState::default(),
 	    multiview_mask: None,
@@ -65,7 +65,7 @@ impl PipelineManager {
 	    }),
 	    cache: None,
 	});
-
+        
 	Self {
 	    mesh_pipeline,
 	}

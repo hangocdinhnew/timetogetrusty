@@ -49,13 +49,13 @@ impl Default for App {
 
 const VERTICES_SQUARE: [f32; 3*(4*2)] = [
     -1.0, -1.0, -1.0,
-     1.0, -1.0, -1.0,
-     1.0,  1.0, -1.0,
+    1.0, -1.0, -1.0,
+    1.0,  1.0, -1.0,
     -1.0,  1.0, -1.0,
-
+    
     -1.0, -1.0, 1.0,
-     1.0, -1.0, 1.0,
-     1.0,  1.0, 1.0,
+    1.0, -1.0, 1.0,
+    1.0,  1.0, 1.0,
     -1.0,  1.0, 1.0
 ];
 
@@ -89,17 +89,17 @@ impl ApplicationHandler for App {
 		return;
 	    },
 	};
-
+        
 	self.renderer
 	    .as_mut()
 	    .unwrap()
 	    .set_vsync(false);
-
+        
 	self.square = self.renderer
 	    .as_mut()
 	    .unwrap()
 	    .upload_mesh(&VERTICES_SQUARE, &INDICES_SQUARE);
-
+        
 	self.first_square_transform = glam::Mat4::from_scale(glam::Vec3::new(0.5, 0.5, 0.5));
     }
     
@@ -138,9 +138,9 @@ impl ApplicationHandler for App {
 			_ => {},
 		    }
 		}
-
+                
 		self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * dt);
-
+                
 		for i in 0..10 {
 		    renderer.add_mesh_instances(self.square, self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0)));
 		}

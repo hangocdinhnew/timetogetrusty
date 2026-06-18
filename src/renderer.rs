@@ -61,7 +61,7 @@ impl Renderer {
 	let gfx = GraphicsContext::new(display, window)?;
 	let buffer = BufferManager::new(&gfx);
 	let pipeline = PipelineManager::new(&gfx, &buffer);
-
+        
 	Ok(Self {
 	    gfx,
 	    buffer,
@@ -78,29 +78,29 @@ impl Renderer {
 	    },
 	})
     }
-
+    
     pub fn upload_mesh(&mut self, vertices: &[f32], indices: &[u32]) -> MeshID {
 	let vertices_buf = self.gfx.create_vertex_buffer(std::mem::size_of_val(vertices) as u64);
 	let indices_buf = self.gfx.create_index_buffer(std::mem::size_of_val(indices) as u64);
-
+        
 	self.gfx.write_buf(&vertices_buf, bytemuck::cast_slice(vertices));
 	self.gfx.write_buf(&indices_buf, bytemuck::cast_slice(indices));
-
+        
 	self.meshes.push(Mesh {
 	    vertices_buf,
 	    indices_buf,
 	    index_count: indices.len() as u32,
 	});
-
+        
 	return self.meshes.len() - 1;
     }
-
+    
     pub fn submit_mesh(&mut self, id: MeshID) {
 	self.commands.push(RenderCommand::Mesh {
 	    id,
 	});
     }
-
+    
     pub fn add_mesh_instances(&mut self, id: MeshID, transform: glam::Mat4) {
 	let mesh_instance = MeshInstance {
 	    model: transform,
@@ -111,36 +111,36 @@ impl Renderer {
 	    .or_default()
 	    .push(mesh_instance);
     }
-
+    
     pub fn draw(&mut self, camera: Camera) {
 	let mut frame = match RenderFrame::begin(&self.gfx) {
 	    CurrentRenderFrame::Success(pass) => pass,
 	    CurrentRenderFrame::Timeout | CurrentRenderFrame::Occluded => {
 		self.batches.clear();
 		self.commands.clear();
-
+                
 		return;
 	    }
-
+            
 	    CurrentRenderFrame::Suboptimal | CurrentRenderFrame::Outdated => {
 		self.gfx.reconfigure_surface();
 		
 		self.batches.clear();
 		self.commands.clear();
-
+                
 		return;
 	    },
-
+            
 	    CurrentRenderFrame::Lost => {
 		self.gfx.recreate_surface();
 		self.gfx.reconfigure_surface();
-
+                
 		self.batches.clear();
 		self.commands.clear();
 		
 		return;
 	    },
-
+            
 	    CurrentRenderFrame::Validation => unreachable!(),
 	};
 	
@@ -196,9 +196,9 @@ impl Renderer {
 		}
 	    }
 	}
-
+        
 	frame.end(&self.gfx);
-
+        
 	self.batches.clear();
 	self.commands.clear();
     }
@@ -207,22 +207,22 @@ impl Renderer {
 	if width == 0 || height == 0 {
 	    return;
 	}
-
+        
 	self.gfx.surface_config.width = width;
 	self.gfx.surface_config.height = height;
-
+        
 	self.gfx.reconfigure_surface();
-
+        
 	self.gfx.recreate_depth(width, height);
     }
-
+    
     pub fn set_vsync(&mut self, is_vsync: bool) {
 	if is_vsync {
 	    self.gfx.surface_config.present_mode = wgpu::PresentMode::AutoVsync;
 	} else {
 	    self.gfx.surface_config.present_mode = wgpu::PresentMode::AutoNoVsync;
 	}
-
+        
 	self.gfx.reconfigure_surface();
     }
 }

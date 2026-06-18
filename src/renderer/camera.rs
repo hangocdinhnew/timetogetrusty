@@ -30,9 +30,9 @@ impl Camera {
     
     pub fn move_with(&mut self, right: f32, up: f32, forward: f32) {
 	let forward_vec = self.forward();
-
+        
 	let right_vec = self.right();
-
+        
 	self.position += right_vec * right;
 	self.position += Vec3::Y * up;
 	self.position += forward_vec * forward;
@@ -53,7 +53,7 @@ impl Camera {
     pub fn set_draw_distance(&mut self, draw_distance: f32) {
 	self.draw_distance = draw_distance;
     }
-
+    
     fn right(&self) -> Vec3 {
 	self.forward().cross(Vec3::Y).normalize()
     }

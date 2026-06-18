@@ -50,52 +50,52 @@ impl BufferManager {
 	gfx.queue.write_buffer(&camera_ubuf, 0, bytemuck::bytes_of(&view_projection));
 	
 	let mesh_bg_layout = gfx.device.create_bind_group_layout(
-		&wgpu::BindGroupLayoutDescriptor {
-		    label: Some("Bind Group Layout"),
-		    entries: &[
-			wgpu::BindGroupLayoutEntry {
-			    binding: 0,
-			    visibility: wgpu::ShaderStages::VERTEX,
-			    ty: wgpu::BindingType::Buffer {
-				ty: wgpu::BufferBindingType::Storage {
-				    read_only: true,
-				},
-				has_dynamic_offset: false,
-				min_binding_size: None,
+	    &wgpu::BindGroupLayoutDescriptor {
+		label: Some("Bind Group Layout"),
+		entries: &[
+		    wgpu::BindGroupLayoutEntry {
+			binding: 0,
+			visibility: wgpu::ShaderStages::VERTEX,
+			ty: wgpu::BindingType::Buffer {
+			    ty: wgpu::BufferBindingType::Storage {
+				read_only: true,
 			    },
-			    count: None,
+			    has_dynamic_offset: false,
+			    min_binding_size: None,
 			},
-			wgpu::BindGroupLayoutEntry {
-			    binding: 1,
-			    visibility: wgpu::ShaderStages::VERTEX,
-			    ty: wgpu::BindingType::Buffer {
-				ty: wgpu::BufferBindingType::Uniform,
-				has_dynamic_offset: false,
-				min_binding_size: None,
-			    },
-			    count: None,
+			count: None,
+		    },
+		    wgpu::BindGroupLayoutEntry {
+			binding: 1,
+			visibility: wgpu::ShaderStages::VERTEX,
+			ty: wgpu::BindingType::Buffer {
+			    ty: wgpu::BufferBindingType::Uniform,
+			    has_dynamic_offset: false,
+			    min_binding_size: None,
 			},
-		    ],
-		}
-	    );
+			count: None,
+		    },
+		],
+	    }
+	);
 	
 	let mesh_bind_group = gfx.device.create_bind_group(
-		&wgpu::BindGroupDescriptor {
-		    label: Some("Bind Group"),
-		    layout: &mesh_bg_layout,
-		    entries: &[
-			wgpu::BindGroupEntry {
-			    binding: 0,
-			    resource: model_sbuf.as_entire_binding(),
-			},
-			wgpu::BindGroupEntry {
-			    binding: 1,
-			    resource: camera_ubuf.as_entire_binding(),
-			},
-		    ],
-		}
-	    );
-
+	    &wgpu::BindGroupDescriptor {
+		label: Some("Bind Group"),
+		layout: &mesh_bg_layout,
+		entries: &[
+		    wgpu::BindGroupEntry {
+			binding: 0,
+			resource: model_sbuf.as_entire_binding(),
+		    },
+		    wgpu::BindGroupEntry {
+			binding: 1,
+			resource: camera_ubuf.as_entire_binding(),
+		    },
+		],
+	    }
+	);
+        
 	Self {
 	    model_sbuf,
 	    mesh_bg_layout,
@@ -104,7 +104,7 @@ impl BufferManager {
 	    camera_ubuf,
 	}
     }
-
+    
     pub fn recreate_model_sbuf(&mut self, gfx: &GraphicsContext) {
 	self.model_sbuf = gfx.device.create_buffer(&BufferDescriptor {
 	    label: None,
@@ -112,7 +112,7 @@ impl BufferManager {
 	    usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
 	    mapped_at_creation: false,
 	});
-
+        
 	self.mesh_bind_group = gfx.device.create_bind_group(
             &wgpu::BindGroupDescriptor {
 		label: Some("Bind Group"),
@@ -130,7 +130,7 @@ impl BufferManager {
             },
 	);
     }
-
+    
     pub fn write_buf(&mut self, gfx: &GraphicsContext, buffer_type: BufferType, data: &[u8]) {
 	match buffer_type {
 	    BufferType::Model => gfx.write_buf(&self.model_sbuf, data),

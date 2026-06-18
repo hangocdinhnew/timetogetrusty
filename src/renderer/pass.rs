@@ -34,23 +34,23 @@ impl RenderFrame {
 	    CurrentSurfaceTexture::Lost => return CurrentRenderFrame::Lost,
 	    CurrentSurfaceTexture::Validation => return CurrentRenderFrame::Validation,
 	};
-
+        
 	let texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
                 format: Some(gfx.surface_caps.formats[0].add_srgb_suffix()),
                 ..Default::default()
             });
-
+        
 	let encoder = gfx.device.create_command_encoder(&Default::default());
-
+        
 	CurrentRenderFrame::Success(Self {
 	    surface_texture,
 	    texture_view,
 	    encoder,
 	})
     }
-
+    
     pub fn begin_pass(&mut self, gfx: &GraphicsContext) -> RenderPass<'_> {
         let pass = self.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 	    label: None,
@@ -75,12 +75,12 @@ impl RenderFrame {
 	    occlusion_query_set: None,
 	    multiview_mask: None,
         });
-
+        
 	RenderPass {
 	    pass,
 	}
     }
-
+    
     pub fn end(self, gfx: &GraphicsContext) {
 	gfx.queue.submit(Some(self.encoder.finish()));
 	self.surface_texture.present();
@@ -97,21 +97,21 @@ impl<'a> RenderPass<'a> {
 	    PipelineType::Mesh => self.pass.set_pipeline(&pipeline.mesh_pipeline),
 	}
     }
-
+    
     pub fn set_vertex_buffer(&mut self, buffer: &wgpu::Buffer) {
 	self.pass.set_vertex_buffer(0, buffer.slice(..));
     }
-
+    
     pub fn set_index_buffer(&mut self, buffer: &wgpu::Buffer) {
 	self.pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint32);
     }
-
+    
     pub fn set_bind_group(&mut self, buffer: &BufferManager, bg_type: BgType) {
 	match bg_type {
 	    BgType::Mesh => self.pass.set_bind_group(0, &buffer.mesh_bind_group, &[]),
 	}
     }
-
+    
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
 	self.pass.draw_indexed(indices, base_vertex, instances)
     }

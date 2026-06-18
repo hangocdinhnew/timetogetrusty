@@ -20,7 +20,7 @@ impl DeltaClock {
 	self.dt = (now - self.last_frame).as_secs_f32();
 	self.last_frame = now;
     }
-
+    
     pub fn get_dt(&self) -> f32 {
 	return self.dt;
     }

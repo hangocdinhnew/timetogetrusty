@@ -28,19 +28,19 @@ impl GraphicsContext {
     pub fn new(display: OwnedDisplayHandle, window: Arc<Window>) -> anyhow::Result<Self> {
 	let instance_descriptor = InstanceDescriptor::new_with_display_handle(Box::new(display)).with_env();
 	let instance = Instance::new(instance_descriptor);
-
+        
 	let adapter_descriptor = RequestAdapterOptions::default();
 	let adapter = pollster::block_on(instance.request_adapter(&adapter_descriptor))?;
-
+        
 	let device_descriptor = DeviceDescriptor::default();
 	let (device, queue) = pollster::block_on(adapter.request_device(&device_descriptor))?;
-
+        
 	let surface = instance.create_surface(window
 					      .clone())?;
-
+        
 	let caps = surface.get_capabilities(&adapter);
 	let format = caps.formats[0];
-
+        
 	let ref_window = window.clone();
 	let window_size = ref_window.as_ref().inner_size();
 	
@@ -54,12 +54,12 @@ impl GraphicsContext {
 	    view_formats: vec![],
 	    desired_maximum_frame_latency: 2,
 	};
-
+        
 	surface.configure(
 	    &device,
 	    &surface_config,
 	);
-
+        
 	let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
 	    label: Some("Depth Texture"),
 	    size: wgpu::Extent3d {
@@ -75,7 +75,7 @@ impl GraphicsContext {
 	    view_formats: &[],
 	});
 	let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
+        
 	Ok(Self {
 	    window,
 	    instance,
@@ -88,7 +88,7 @@ impl GraphicsContext {
 	    depth_view,
 	})
     }
-
+    
     pub fn recreate_surface(&mut self) {
 	self.surface = self.instance.create_surface(self.window.clone()).unwrap();
     }
@@ -99,7 +99,7 @@ impl GraphicsContext {
 	    &self.surface_config,
 	);
     }
-
+    
     pub fn recreate_depth(&mut self, width: u32, height: u32) {
 	let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
 	    label: Some("Depth Texture"),
@@ -115,10 +115,10 @@ impl GraphicsContext {
 	    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
 	    view_formats: &[],
 	});
-
+        
 	self.depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
-
+    
     pub fn create_vertex_buffer(&self, vertices_len: u64) -> wgpu::Buffer {
 	let vertices_buf = self.device.create_buffer(&BufferDescriptor {
 	    label: None,
@@ -126,10 +126,10 @@ impl GraphicsContext {
 	    usage: BufferUsages::COPY_DST | BufferUsages::VERTEX,
 	    mapped_at_creation: false,
 	});
-
+        
 	return vertices_buf;
     }
-
+    
     pub fn create_index_buffer(&self, indices_len: u64) -> wgpu::Buffer {
 	let indices_buf = self.device.create_buffer(&BufferDescriptor {
 	    label: None,
@@ -137,10 +137,10 @@ impl GraphicsContext {
 	    usage: BufferUsages::COPY_DST | BufferUsages::INDEX,
 	    mapped_at_creation: false,
 	});
-
+        
 	return indices_buf;
     }
-
+    
     pub fn write_buf(&self, buffer: &wgpu::Buffer, data: &[u8]) {
 	self.queue.write_buffer(buffer, 0, data);
     }
