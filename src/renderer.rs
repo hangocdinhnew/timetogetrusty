@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::collections::HashMap;
 
 use winit::{
     window::Window,
@@ -27,12 +26,16 @@ pub use camera::Camera;
 
 mod pipeline;
 use pipeline::{PipelineManager, PipelineType};
+pub use pipeline::DrawMethod;
 
 mod buffer;
 use buffer::{BufferManager, BufferType, BgType};
 
 mod pass;
 use pass::{CurrentRenderFrame, RenderFrame};
+
+mod state;
+use state::StateManager;
 
 struct Mesh {
     vertices_buf: wgpu::Buffer,
@@ -41,17 +44,18 @@ struct Mesh {
 }
 
 pub enum RenderCommand {
-    Mesh { id: MeshID },
+    Object {
+	id: MeshID,
+	transform: glam::Mat4,
+	draw_method: DrawMethod,
+    },
 }
 
 pub struct Renderer {
     gfx: GraphicsContext,
     buffer: BufferManager,
     pipeline: PipelineManager,
-    commands: Vec<RenderCommand>,
-    meshes: Vec<Mesh>,
-    batches: HashMap<MeshID, Vec<MeshInstance>>,
-    last_camera: Camera,
+    state: StateManager,
 }
 
 pub type MeshID = usize;
@@ -61,21 +65,13 @@ impl Renderer {
         let gfx = GraphicsContext::new(display, window)?;
         let buffer = BufferManager::new(&gfx);
         let pipeline = PipelineManager::new(&gfx, &buffer);
+	let state = StateManager::new();
         
         Ok(Self {
             gfx,
             buffer,
             pipeline,
-            commands: Vec::new(),
-            meshes: Vec::new(),
-            batches: HashMap::new(),
-            last_camera: Camera {
-                position: glam::Vec3::ZERO,
-                yaw: 0.0,
-                pitch: 0.0,
-                fov: 0.0,
-                draw_distance: 0.0,
-            },
+	    state,
         })
     }
     
@@ -86,38 +82,43 @@ impl Renderer {
         self.gfx.write_buf(&vertices_buf, bytemuck::cast_slice(vertices));
         self.gfx.write_buf(&indices_buf, bytemuck::cast_slice(indices));
         
-        self.meshes.push(Mesh {
+        self.state.meshes.push(Mesh {
             vertices_buf,
             indices_buf,
             index_count: indices.len() as u32,
         });
         
-        return self.meshes.len() - 1;
+        return self.state.meshes.len() - 1;
     }
     
-    pub fn submit_mesh(&mut self, id: MeshID) {
-        self.commands.push(RenderCommand::Mesh {
+    pub fn submit_object(&mut self, id: MeshID, transform: glam::Mat4, draw_method: DrawMethod) {
+        self.state.commands.push(RenderCommand::Object {
             id,
+	    transform,
+	    draw_method,
         });
     }
     
-    pub fn add_mesh_instances(&mut self, id: MeshID, transform: glam::Mat4) {
-        let mesh_instance = MeshInstance {
-            model: transform,
-        };
-        
-        self.batches
-            .entry(id)
-            .or_default()
-            .push(mesh_instance);
-    }
-    
     pub fn draw(&mut self, camera: Camera) {
+        self.state.batches.clear();
+
+	for command in &self.state.commands {
+	    match command {
+		RenderCommand::Object { id, transform, .. } => {
+		    self.state.batches
+			.entry(*id)
+			.or_default()
+			.push(MeshInstance {
+			    model: *transform,
+			});
+		}
+	    }
+	}
+	
         let mut frame = match RenderFrame::begin(&self.gfx) {
             CurrentRenderFrame::Success(pass) => pass,
             CurrentRenderFrame::Timeout | CurrentRenderFrame::Occluded => {
-                self.batches.clear();
-                self.commands.clear();
+                self.state.commands.clear();
                 
                 return;
             }
@@ -125,8 +126,7 @@ impl Renderer {
             CurrentRenderFrame::Suboptimal | CurrentRenderFrame::Outdated => {
                 self.gfx.reconfigure_surface();
                 
-                self.batches.clear();
-                self.commands.clear();
+                self.state.commands.clear();
                 
                 return;
             },
@@ -135,8 +135,7 @@ impl Renderer {
                 self.gfx.recreate_surface();
                 self.gfx.reconfigure_surface();
                 
-                self.batches.clear();
-                self.commands.clear();
+                self.state.commands.clear();
                 
                 return;
             },
@@ -147,14 +146,15 @@ impl Renderer {
         {
             let mut pass = frame.begin_pass(&self.gfx);
             
-            pass.set_pipeline(&self.pipeline, PipelineType::Mesh);
+	    let last_mesh_draw_method = DrawMethod::Triangles;
+	    pass.set_pipeline(&self.pipeline, PipelineType::Mesh);
             
-            for command in &self.commands {
+            for command in &self.state.commands {
                 match command {
-                    RenderCommand::Mesh { id } => {
+                    RenderCommand::Object { id, draw_method, .. } => {
                         let id = *id;
-                        let mesh = &self.meshes[id];
-                        let instances = self.batches
+                        let mesh = &self.state.meshes[id];
+                        let instances = self.state.batches
                             .get(&id)
                             .expect("MeshID is invalid, this is a bug!");
                         
@@ -171,7 +171,7 @@ impl Renderer {
                             tracing::debug!("Triggered: recreate buffer with size: {}", required_size.next_power_of_two());
                         }
                         
-                        if self.last_camera != camera {
+                        if self.state.last_camera != camera {
                             let projection = glam::Mat4::perspective_rh(camera.fov.to_radians(),
                                                                         self.gfx.surface_config.width as f32 / self.gfx.surface_config.height as f32,
                                                                         0.1,
@@ -184,9 +184,15 @@ impl Renderer {
                             
                             self.buffer.write_buf(&self.gfx, BufferType::Camera, bytemuck::bytes_of(&view_projection));
                             
-                            self.last_camera = camera;
+                            self.state.last_camera = camera;
                         }
                         
+			if *draw_method != last_mesh_draw_method {
+			    match draw_method {
+				DrawMethod::Triangles => pass.set_pipeline(&self.pipeline, PipelineType::Mesh),
+				DrawMethod::Lines => pass.set_pipeline(&self.pipeline, PipelineType::Mesh),
+			    }
+			}
                         pass.set_vertex_buffer(&mesh.vertices_buf);
                         pass.set_index_buffer(&mesh.indices_buf);
                         pass.set_bind_group(&self.buffer, BgType::Mesh);
@@ -199,8 +205,7 @@ impl Renderer {
         
         frame.end(&self.gfx);
         
-        self.batches.clear();
-        self.commands.clear();
+        self.state.commands.clear();
     }
     
     pub fn resize(&mut self, width: u32, height: u32) {

@@ -95,6 +95,7 @@ impl<'a> RenderPass<'a> {
     pub fn set_pipeline(&mut self, pipeline: &PipelineManager, pipeline_type: PipelineType) {
         match pipeline_type {
             PipelineType::Mesh => self.pass.set_pipeline(&pipeline.mesh_pipeline),
+	    PipelineType::MeshLines => self.pass.set_pipeline(&pipeline.mesh_lines_pipeline),
         }
     }
     

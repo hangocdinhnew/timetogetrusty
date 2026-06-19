@@ -142,9 +142,9 @@ impl ApplicationHandler for App {
                 self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * dt);
                 
                 for i in 0..10 {
-                    renderer.add_mesh_instances(self.square, self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0)));
+		    let transform = self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0));
+                    renderer.submit_object(self.square, transform, renderer::DrawMethod::Lines);
                 }
-                renderer.submit_mesh(self.square);
                 
                 renderer.draw(self.camera);
                 
