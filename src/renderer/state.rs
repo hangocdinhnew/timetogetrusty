@@ -1,10 +1,16 @@
 use std::collections::HashMap;
-use crate::renderer::{Camera, RenderCommand, Mesh, MeshID, MeshInstance};
+use crate::renderer::{Camera, RenderCommand, Mesh, MeshID, Material, MeshInstance};
+
+#[derive(Hash, PartialEq, Eq)]
+pub struct BatchKey {
+    pub mesh: MeshID,
+    pub material: Material,
+}
 
 pub struct StateManager {
     pub commands: Vec<RenderCommand>,
     pub meshes: Vec<Mesh>,
-    pub batches: HashMap<MeshID, Vec<MeshInstance>>,
+    pub batches: HashMap<BatchKey, Vec<MeshInstance>>,
     pub last_camera: Camera,
 }
 

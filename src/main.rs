@@ -18,7 +18,9 @@ use tracing_subscriber::EnvFilter;
 mod renderer;
 use renderer::Renderer;
 use renderer::MeshID;
+use renderer::Material;
 use renderer::Camera;
+use renderer::DrawMethod;
 
 mod clock;
 use clock::DeltaClock;
@@ -143,7 +145,9 @@ impl ApplicationHandler for App {
                 
                 for i in 0..10 {
 		    let transform = self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0));
-                    renderer.submit_object(self.square, transform, renderer::DrawMethod::Lines);
+                    renderer.submit_object(self.square, Material {
+                        draw_method: DrawMethod::Triangles
+                    }, transform);
                 }
                 
                 renderer.draw(self.camera);

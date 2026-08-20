@@ -2,7 +2,7 @@ use crate::renderer::graphics_context::GraphicsContext;
 use crate::renderer::buffer::BufferManager;
 use wgpu::{RenderPipeline};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Hash, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DrawMethod {
     Triangles,
     Lines,

@@ -35,7 +35,7 @@ mod pass;
 use pass::{CurrentRenderFrame, RenderFrame};
 
 mod state;
-use state::StateManager;
+use state::{StateManager, BatchKey};
 
 struct Mesh {
     vertices_buf: wgpu::Buffer,
@@ -43,11 +43,16 @@ struct Mesh {
     index_count: u32,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+pub struct Material {
+    pub draw_method: DrawMethod,
+}
+
 pub enum RenderCommand {
     Object {
-	id: MeshID,
-	transform: glam::Mat4,
-	draw_method: DrawMethod,
+        mesh: MeshID,
+        material: Material,
+        transform: glam::Mat4,
     },
 }
 
@@ -65,13 +70,13 @@ impl Renderer {
         let gfx = GraphicsContext::new(display, window)?;
         let buffer = BufferManager::new(&gfx);
         let pipeline = PipelineManager::new(&gfx, &buffer);
-	let state = StateManager::new();
+        let state = StateManager::new();
         
         Ok(Self {
             gfx,
             buffer,
             pipeline,
-	    state,
+            state,
         })
     }
     
@@ -88,33 +93,38 @@ impl Renderer {
             index_count: indices.len() as u32,
         });
         
-        return self.state.meshes.len() - 1;
+        self.state.meshes.len() - 1
     }
     
-    pub fn submit_object(&mut self, id: MeshID, transform: glam::Mat4, draw_method: DrawMethod) {
+    pub fn submit_object(&mut self, mesh: MeshID, material: Material, transform: glam::Mat4) {
         self.state.commands.push(RenderCommand::Object {
-            id,
-	    transform,
-	    draw_method,
+            mesh,
+            material,
+            transform
         });
     }
     
     pub fn draw(&mut self, camera: Camera) {
         self.state.batches.clear();
 
-	for command in &self.state.commands {
-	    match command {
-		RenderCommand::Object { id, transform, .. } => {
-		    self.state.batches
-			.entry(*id)
-			.or_default()
-			.push(MeshInstance {
-			    model: *transform,
-			});
-		}
-	    }
-	}
-	
+        for command in &self.state.commands {
+            match command {
+                RenderCommand::Object { mesh, material, transform } => {
+                    let key = BatchKey {
+                        mesh: *mesh,
+                        material: *material,
+                    };
+                    
+                    self.state.batches
+                        .entry(key)
+                        .or_default()
+                        .push(MeshInstance {
+                            model: *transform,
+                        });
+                }
+            }
+        }
+        
         let mut frame = match RenderFrame::begin(&self.gfx) {
             CurrentRenderFrame::Success(pass) => pass,
             CurrentRenderFrame::Timeout | CurrentRenderFrame::Occluded => {
@@ -146,16 +156,20 @@ impl Renderer {
         {
             let mut pass = frame.begin_pass(&self.gfx);
             
-	    let last_mesh_draw_method = DrawMethod::Triangles;
-	    pass.set_pipeline(&self.pipeline, PipelineType::Mesh);
-            
+            let mut last_mesh_draw_method = DrawMethod::Triangles;
             for command in &self.state.commands {
                 match command {
-                    RenderCommand::Object { id, draw_method, .. } => {
-                        let id = *id;
-                        let mesh = &self.state.meshes[id];
+                    RenderCommand::Object { mesh, material, .. } => {
+                        let key = BatchKey {
+                            mesh: *mesh,
+                            material: *material,
+                        };
+
+                        let mesh = &self.state.meshes[*mesh];
+                        let material = *material;
+                        
                         let instances = self.state.batches
-                            .get(&id)
+                            .get(&key)
                             .expect("MeshID is invalid, this is a bug!");
                         
                         let required_size = instances.len() * size_of::<MeshInstance>();
@@ -187,12 +201,14 @@ impl Renderer {
                             self.state.last_camera = camera;
                         }
                         
-			if *draw_method != last_mesh_draw_method {
-			    match draw_method {
-				DrawMethod::Triangles => pass.set_pipeline(&self.pipeline, PipelineType::Mesh),
-				DrawMethod::Lines => pass.set_pipeline(&self.pipeline, PipelineType::Mesh),
-			    }
-			}
+                        match material.draw_method {
+                            DrawMethod::Triangles => pass.set_pipeline(&self.pipeline, PipelineType::Mesh),
+                            DrawMethod::Lines => pass.set_pipeline(&self.pipeline, PipelineType::Mesh),
+                        }
+
+                        if material.draw_method != last_mesh_draw_method {
+                            last_mesh_draw_method = material.draw_method;
+                        }
                         pass.set_vertex_buffer(&mesh.vertices_buf);
                         pass.set_index_buffer(&mesh.indices_buf);
                         pass.set_bind_group(&self.buffer, BgType::Mesh);
