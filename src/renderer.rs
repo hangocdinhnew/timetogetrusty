@@ -22,7 +22,7 @@ mod graphics_context;
 use graphics_context::GraphicsContext;
 
 pub mod camera;
-pub use camera::Camera;
+pub use camera::PerspectiveCamera;
 
 mod pipeline;
 use pipeline::{PipelineManager, PipelineType};
@@ -35,13 +35,7 @@ mod pass;
 use pass::{CurrentRenderFrame, RenderFrame};
 
 mod state;
-use state::{StateManager, BatchKey};
-
-struct Mesh {
-    vertices_buf: wgpu::Buffer,
-    indices_buf: wgpu::Buffer,
-    index_count: u32,
-}
+use state::{StateManager, BatchKey, Mesh};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub struct Material {
@@ -104,7 +98,7 @@ impl Renderer {
         });
     }
     
-    pub fn draw(&mut self, camera: Camera) {
+    pub fn draw(&mut self, camera: PerspectiveCamera) {
         self.state.batches.clear();
 
         for command in &self.state.commands {
@@ -186,7 +180,7 @@ impl Renderer {
                         }
                         
                         if self.state.last_camera != camera {
-                            let projection = glam::Mat4::perspective_rh(camera.fov.to_radians(),
+                            let projection = glam::camera::rh::proj::directx::perspective(camera.fov.to_radians(),
                                                                         self.gfx.surface_config.width as f32 / self.gfx.surface_config.height as f32,
                                                                         0.1,
                                                                         camera.draw_distance);
@@ -196,7 +190,7 @@ impl Renderer {
                                 projection,
                             };
                             
-                            self.buffer.write_buf(&self.gfx, BufferType::Camera, bytemuck::bytes_of(&view_projection));
+                            self.buffer.write_buf(&self.gfx, BufferType::PerspectiveCamera, bytemuck::bytes_of(&view_projection));
                             
                             self.state.last_camera = camera;
                         }

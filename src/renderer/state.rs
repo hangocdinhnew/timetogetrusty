@@ -1,5 +1,11 @@
 use std::collections::HashMap;
-use crate::renderer::{Camera, RenderCommand, Mesh, MeshID, Material, MeshInstance};
+use crate::renderer::{PerspectiveCamera, RenderCommand, MeshID, Material, MeshInstance};
+
+pub struct Mesh {
+    pub vertices_buf: wgpu::Buffer,
+    pub indices_buf: wgpu::Buffer,
+    pub index_count: u32,
+}
 
 #[derive(Hash, PartialEq, Eq)]
 pub struct BatchKey {
@@ -11,7 +17,7 @@ pub struct StateManager {
     pub commands: Vec<RenderCommand>,
     pub meshes: Vec<Mesh>,
     pub batches: HashMap<BatchKey, Vec<MeshInstance>>,
-    pub last_camera: Camera,
+    pub last_camera: PerspectiveCamera,
 }
 
 impl StateManager {
@@ -20,7 +26,7 @@ impl StateManager {
             commands: Vec::new(),
             meshes: Vec::new(),
             batches: HashMap::new(),
-            last_camera: Camera {
+            last_camera: PerspectiveCamera {
                 position: glam::Vec3::ZERO,
                 yaw: 0.0,
                 pitch: 0.0,

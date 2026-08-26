@@ -19,7 +19,7 @@ mod renderer;
 use renderer::Renderer;
 use renderer::MeshID;
 use renderer::Material;
-use renderer::Camera;
+use renderer::PerspectiveCamera;
 use renderer::DrawMethod;
 
 mod clock;
@@ -30,7 +30,7 @@ pub struct App {
     renderer: Option<Renderer>,
     square: MeshID,
     first_square_transform: glam::Mat4,
-    camera: Camera,
+    camera: PerspectiveCamera,
     delta: DeltaClock,
     pressed_keys: HashSet<KeyCode>,
 }
@@ -43,7 +43,7 @@ impl Default for App {
             square: 0,
             first_square_transform: glam::Mat4::IDENTITY,
             delta: DeltaClock::default(),
-            camera: Camera::default(),
+            camera: PerspectiveCamera::default(),
             pressed_keys: HashSet::new(),
         }
     }

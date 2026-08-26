@@ -5,7 +5,7 @@ use crate::renderer::{MeshInstance, ViewProjection};
 
 pub enum BufferType {
     Model,
-    Camera
+    PerspectiveCamera
 }
 
 pub enum BgType {
@@ -134,7 +134,7 @@ impl BufferManager {
     pub fn write_buf(&mut self, gfx: &GraphicsContext, buffer_type: BufferType, data: &[u8]) {
         match buffer_type {
             BufferType::Model => gfx.write_buf(&self.model_sbuf, data),
-            BufferType::Camera => gfx.write_buf(&self.camera_ubuf, data),
+            BufferType::PerspectiveCamera => gfx.write_buf(&self.camera_ubuf, data),
         }
     }
 }

@@ -1,7 +1,7 @@
 use glam::{Vec3, Mat4};
 
 #[derive(PartialEq, Clone, Copy)]
-pub struct Camera {
+pub struct PerspectiveCamera {
     pub position: Vec3,
     
     pub yaw: f32,
@@ -11,11 +11,11 @@ pub struct Camera {
     pub draw_distance: f32,
 }
 
-impl Default for Camera {
+impl Default for PerspectiveCamera {
     fn default() -> Self {
         Self {
             position: Vec3::new(0.0, 0.0, 2.0),
-            yaw: -90.0,
+            yaw: -89.0,
             pitch: 0.0,
             fov: 75.0,
             draw_distance: 100.0,
@@ -23,7 +23,7 @@ impl Default for Camera {
     }
 }
 
-impl Camera {
+impl PerspectiveCamera {
     pub fn move_to(&mut self, x: f32, y: f32, z: f32) {
         self.position = Vec3::new(x, y, z);
     }
@@ -39,7 +39,7 @@ impl Camera {
     }
     
     pub fn view(&self) -> Mat4 {
-        Mat4::look_at_rh(
+        glam::camera::rh::view::look_at_mat4(
             self.position,
             self.position + self.forward(),
             Vec3::Y,
@@ -59,10 +59,15 @@ impl Camera {
     }
     
     fn forward(&self) -> Vec3 {
-        Vec3::new(
-            self.yaw.to_radians().cos() * self.pitch.to_radians().cos(),
-            self.pitch.to_radians().sin(),
-            self.yaw.to_radians().sin() * self.pitch.to_radians().cos(),
-        ).normalize()
+        let yaw = self.yaw.to_radians();
+        let pitch = self.pitch.to_radians();
+        
+        let forward = Vec3::new(
+            yaw.cos() * pitch.cos(),
+            pitch.sin(),
+            yaw.sin() * pitch.cos(),
+        ).normalize();
+        
+        forward
     }
 }

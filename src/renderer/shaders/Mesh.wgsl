@@ -2,7 +2,7 @@ struct Instance {
  model: mat4x4<f32>,
 };
 
-struct Camera {
+struct PerspectiveCamera {
  view: mat4x4<f32>,
  projection: mat4x4<f32>,
 };
@@ -10,7 +10,7 @@ struct Camera {
 @group(0) @binding(0)
 var<storage, read> instances: array<Instance>;
 @group(0) @binding(1)
-var<uniform> camera: Camera;
+var<uniform> camera: PerspectiveCamera;
 
 @vertex
 fn vs_main(@location(0) pos: vec3<f32>, @builtin(instance_index) instance_idx: u32) -> @builtin(position) vec4<f32> {
