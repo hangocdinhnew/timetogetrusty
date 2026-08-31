@@ -54,7 +54,7 @@ const VERTICES_SQUARE: [f32; 3*(4*2)] = [
     1.0, -1.0, -1.0,
     1.0,  1.0, -1.0,
     -1.0,  1.0, -1.0,
-    
+
     -1.0, -1.0, 1.0,
     1.0, -1.0, 1.0,
     1.0,  1.0, 1.0,
@@ -73,7 +73,7 @@ const INDICES_SQUARE: [u32; (3*6)*2] = [
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = WindowAttributes::default();
-        
+
         self.window = match event_loop.create_window(window_attributes) {
             Ok(window) => Some(Arc::new(window)),
             Err(err) => {
@@ -82,7 +82,7 @@ impl ApplicationHandler for App {
                 return;
             },
         };
-        
+
         self.renderer = match Renderer::new(event_loop.owned_display_handle(), self.window.clone().unwrap().clone()) {
             Ok(renderer) => Some(renderer),
             Err(err) => {
@@ -91,24 +91,24 @@ impl ApplicationHandler for App {
                 return;
             },
         };
-        
+
         self.renderer
             .as_mut()
             .unwrap()
             .set_vsync(false);
-        
+
         self.square = self.renderer
             .as_mut()
             .unwrap()
             .upload_mesh(&VERTICES_SQUARE, &INDICES_SQUARE);
-        
+
         self.first_square_transform = glam::Mat4::from_scale(glam::Vec3::new(0.5, 0.5, 0.5));
     }
-    
+
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         let window = self.window.as_mut().unwrap();
         let renderer = self.renderer.as_mut().unwrap();
-        
+
         match event {
             WindowEvent::CloseRequested => {
                 info!("Close was requested; stopping");
@@ -116,15 +116,15 @@ impl ApplicationHandler for App {
             },
             WindowEvent::Resized(size) => {
                 renderer.resize(size.width, size.height);
-                
+
                 window.request_redraw();
             },
             WindowEvent::RedrawRequested => {
                 self.delta.clock();
-                
+
                 let dt = self.delta.get_dt();
                 let speed = dt * 5.0;
-                
+
                 for key in &self.pressed_keys {
                     match *key {
                         KeyCode::KeyW => self.camera.move_with(0.0, 0.0, speed),
@@ -140,18 +140,18 @@ impl ApplicationHandler for App {
                         _ => {},
                     }
                 }
-                
+
                 self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * dt);
-                
+
                 for i in 0..10 {
-		    let transform = self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0));
+                    let transform = self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0));
                     renderer.submit_object(self.square, Material {
                         draw_method: DrawMethod::Triangles
                     }, transform);
                 }
-                
+
                 renderer.draw(self.camera);
-                
+
                 window.request_redraw();
             },
             WindowEvent::KeyboardInput {event, ..} => {
@@ -177,17 +177,17 @@ fn main() -> anyhow::Result<()> {
     } else {
         false
     };
-    
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .with_ansi(!is_dumb)
         .init();
-    
+
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    
+
     let mut app = App::default();
     event_loop.run_app(&mut app)?;
-    
+
     Ok(())
 }

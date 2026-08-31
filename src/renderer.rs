@@ -65,7 +65,7 @@ impl Renderer {
         let buffer = BufferManager::new(&gfx);
         let pipeline = PipelineManager::new(&gfx, &buffer);
         let state = StateManager::new();
-        
+
         Ok(Self {
             gfx,
             buffer,
@@ -73,23 +73,23 @@ impl Renderer {
             state,
         })
     }
-    
+
     pub fn upload_mesh(&mut self, vertices: &[f32], indices: &[u32]) -> MeshID {
         let vertices_buf = self.gfx.create_vertex_buffer(std::mem::size_of_val(vertices) as u64);
         let indices_buf = self.gfx.create_index_buffer(std::mem::size_of_val(indices) as u64);
-        
+
         self.gfx.write_buf(&vertices_buf, bytemuck::cast_slice(vertices));
         self.gfx.write_buf(&indices_buf, bytemuck::cast_slice(indices));
-        
+
         self.state.meshes.push(Mesh {
             vertices_buf,
             indices_buf,
             index_count: indices.len() as u32,
         });
-        
+
         self.state.meshes.len() - 1
     }
-    
+
     pub fn submit_object(&mut self, mesh: MeshID, material: Material, transform: glam::Mat4) {
         self.state.commands.push(RenderCommand::Object {
             mesh,
@@ -97,7 +97,7 @@ impl Renderer {
             transform
         });
     }
-    
+
     pub fn draw(&mut self, camera: PerspectiveCamera) {
         self.state.batches.clear();
 
@@ -108,7 +108,7 @@ impl Renderer {
                         mesh: *mesh,
                         material: *material,
                     };
-                    
+
                     self.state.batches
                         .entry(key)
                         .or_default()
@@ -118,38 +118,38 @@ impl Renderer {
                 }
             }
         }
-        
+
         let mut frame = match RenderFrame::begin(&self.gfx) {
             CurrentRenderFrame::Success(pass) => pass,
             CurrentRenderFrame::Timeout | CurrentRenderFrame::Occluded => {
                 self.state.commands.clear();
-                
+
                 return;
             }
-            
+
             CurrentRenderFrame::Suboptimal | CurrentRenderFrame::Outdated => {
                 self.gfx.reconfigure_surface();
-                
+
                 self.state.commands.clear();
-                
+
                 return;
             },
-            
+
             CurrentRenderFrame::Lost => {
                 self.gfx.recreate_surface();
                 self.gfx.reconfigure_surface();
-                
+
                 self.state.commands.clear();
-                
+
                 return;
             },
-            
+
             CurrentRenderFrame::Validation => unreachable!(),
         };
-        
+
         {
             let mut pass = frame.begin_pass(&self.gfx);
-            
+
             let mut last_mesh_draw_method = DrawMethod::Triangles;
             for command in &self.state.commands {
                 match command {
@@ -161,40 +161,40 @@ impl Renderer {
 
                         let mesh = &self.state.meshes[*mesh];
                         let material = *material;
-                        
+
                         let instances = self.state.batches
                             .get(&key)
                             .expect("MeshID is invalid, this is a bug!");
-                        
+
                         let required_size = instances.len() * size_of::<MeshInstance>();
-                        
+
                         if required_size <= self.buffer.model_sbuf_size {
                             self.buffer.write_buf(&self.gfx, BufferType::Model, bytemuck::cast_slice(instances));
                         } else {
                             self.buffer.model_sbuf_size = required_size.next_power_of_two();
                             self.buffer.recreate_model_sbuf(&self.gfx);
-                            
+
                             self.buffer.write_buf(&self.gfx, BufferType::Model, bytemuck::cast_slice(instances));
-                            
+
                             tracing::debug!("Triggered: recreate buffer with size: {}", required_size.next_power_of_two());
                         }
-                        
+
                         if self.state.last_camera != camera {
                             let projection = glam::camera::rh::proj::directx::perspective(camera.fov.to_radians(),
-                                                                        self.gfx.surface_config.width as f32 / self.gfx.surface_config.height as f32,
-                                                                        0.1,
-                                                                        camera.draw_distance);
-                            
+                            self.gfx.surface_config.width as f32 / self.gfx.surface_config.height as f32,
+                            0.1,
+                            camera.draw_distance);
+
                             let view_projection = ViewProjection {
                                 view: camera.view(),
                                 projection,
                             };
-                            
+
                             self.buffer.write_buf(&self.gfx, BufferType::PerspectiveCamera, bytemuck::bytes_of(&view_projection));
-                            
+
                             self.state.last_camera = camera;
                         }
-                        
+
                         match material.draw_method {
                             DrawMethod::Triangles => pass.set_pipeline(&self.pipeline, PipelineType::Mesh),
                             DrawMethod::Lines => pass.set_pipeline(&self.pipeline, PipelineType::Mesh),
@@ -206,38 +206,38 @@ impl Renderer {
                         pass.set_vertex_buffer(&mesh.vertices_buf);
                         pass.set_index_buffer(&mesh.indices_buf);
                         pass.set_bind_group(&self.buffer, BgType::Mesh);
-                        
+
                         pass.draw_indexed(0..mesh.index_count, 0, 0..(instances.len() as u32));
                     }
                 }
             }
         }
-        
+
         frame.end(&self.gfx);
-        
+
         self.state.commands.clear();
     }
-    
+
     pub fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
             return;
         }
-        
+
         self.gfx.surface_config.width = width;
         self.gfx.surface_config.height = height;
-        
+
         self.gfx.reconfigure_surface();
-        
+
         self.gfx.recreate_depth(width, height);
     }
-    
+
     pub fn set_vsync(&mut self, is_vsync: bool) {
         if is_vsync {
             self.gfx.surface_config.present_mode = wgpu::PresentMode::AutoVsync;
         } else {
             self.gfx.surface_config.present_mode = wgpu::PresentMode::AutoNoVsync;
         }
-        
+
         self.gfx.reconfigure_surface();
     }
 }

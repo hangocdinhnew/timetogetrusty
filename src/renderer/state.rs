@@ -22,7 +22,7 @@ pub struct StateManager {
 
 impl StateManager {
     pub fn new() -> Self {
-	Self {
+        Self {
             commands: Vec::new(),
             meshes: Vec::new(),
             batches: HashMap::new(),
@@ -33,6 +33,6 @@ impl StateManager {
                 fov: 0.0,
                 draw_distance: 0.0,
             },
-	}
+        }
     }
 }

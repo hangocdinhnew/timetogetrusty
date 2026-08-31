@@ -28,27 +28,27 @@ impl BufferManager {
             usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        
+
         let mesh_instance = MeshInstance {
             model: glam::Mat4::IDENTITY,
         };
-        
+
         gfx.queue.write_buffer(&model_sbuf, 0, bytemuck::bytes_of(&mesh_instance));
-        
+
         let camera_ubuf = gfx.device.create_buffer(&BufferDescriptor {
             label: None,
             size: size_of::<ViewProjection>() as u64,
             usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM,
             mapped_at_creation: false,
         });
-        
+
         let view_projection = ViewProjection {
             view: glam::Mat4::IDENTITY,
             projection: glam::Mat4::IDENTITY,
         };
-        
+
         gfx.queue.write_buffer(&camera_ubuf, 0, bytemuck::bytes_of(&view_projection));
-        
+
         let mesh_bg_layout = gfx.device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 label: Some("Bind Group Layout"),
@@ -75,10 +75,10 @@ impl BufferManager {
                         },
                         count: None,
                     },
-                ],
+                    ],
             }
         );
-        
+
         let mesh_bind_group = gfx.device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 label: Some("Bind Group"),
@@ -95,7 +95,7 @@ impl BufferManager {
                 ],
             }
         );
-        
+
         Self {
             model_sbuf,
             mesh_bg_layout,
@@ -104,7 +104,7 @@ impl BufferManager {
             camera_ubuf,
         }
     }
-    
+
     pub fn recreate_model_sbuf(&mut self, gfx: &GraphicsContext) {
         self.model_sbuf = gfx.device.create_buffer(&BufferDescriptor {
             label: None,
@@ -112,7 +112,7 @@ impl BufferManager {
             usage: BufferUsages::COPY_DST | BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        
+
         self.mesh_bind_group = gfx.device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 label: Some("Bind Group"),
@@ -130,7 +130,7 @@ impl BufferManager {
             },
         );
     }
-    
+
     pub fn write_buf(&mut self, gfx: &GraphicsContext, buffer_type: BufferType, data: &[u8]) {
         match buffer_type {
             BufferType::Model => gfx.write_buf(&self.model_sbuf, data),
