@@ -1,26 +1,22 @@
-use std::{
-    sync::Arc,
-    io::IsTerminal,
-    collections::HashSet,
-};
+use std::{collections::HashSet, io::IsTerminal, sync::Arc};
 
 use winit::{
-    event_loop::{ControlFlow, ActiveEventLoop, EventLoop},
     application::ApplicationHandler,
-    event::{WindowEvent},
-    window::{Window, WindowId, WindowAttributes},
-    keyboard::{KeyCode}
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::KeyCode,
+    window::{Window, WindowAttributes, WindowId},
 };
 
-use tracing::{info, error};
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 mod renderer;
-use renderer::Renderer;
-use renderer::MeshID;
-use renderer::Material;
-use renderer::PerspectiveCamera;
 use renderer::DrawMethod;
+use renderer::Material;
+use renderer::MeshID;
+use renderer::PerspectiveCamera;
+use renderer::Renderer;
 
 mod clock;
 use clock::DeltaClock;
@@ -45,29 +41,18 @@ impl Default for App {
             delta: DeltaClock::default(),
             camera: PerspectiveCamera::default(),
             pressed_keys: HashSet::new(),
-        }
+        };
     }
 }
 
-const VERTICES_SQUARE: [f32; 3*(4*2)] = [
-    -1.0, -1.0, -1.0,
-    1.0, -1.0, -1.0,
-    1.0,  1.0, -1.0,
-    -1.0,  1.0, -1.0,
-
-    -1.0, -1.0, 1.0,
-    1.0, -1.0, 1.0,
-    1.0,  1.0, 1.0,
-    -1.0,  1.0, 1.0
+const VERTICES_SQUARE: [f32; 3 * (4 * 2)] = [
+    -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0, -1.0, 1.0, 1.0, -1.0,
+    1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
 ];
 
-const INDICES_SQUARE: [u32; (3*6)*2] = [
-    0,1,2, 0,2,3,
-    4,6,5, 4,7,6,
-    0,5,1, 0,4,5,
-    3,2,6, 3,6,7,
-    0,3,7, 0,7,4,
-    1,5,6, 1,6,2
+const INDICES_SQUARE: [u32; (3 * 6) * 2] = [
+    0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 5, 1, 0, 4, 5, 3, 2, 6, 3, 6, 7, 0, 3, 7, 0, 7, 4, 1, 5,
+    6, 1, 6, 2,
 ];
 
 impl ApplicationHandler for App {
@@ -80,24 +65,25 @@ impl ApplicationHandler for App {
                 error!("Error while creating window! Reason: {err}");
                 event_loop.exit();
                 return;
-            },
+            }
         };
 
-        self.renderer = match Renderer::new(event_loop.owned_display_handle(), self.window.clone().unwrap().clone()) {
+        self.renderer = match Renderer::new(
+            event_loop.owned_display_handle(),
+            self.window.clone().unwrap().clone(),
+        ) {
             Ok(renderer) => Some(renderer),
             Err(err) => {
                 error!("Error while creating renderer! Reason: {err}");
                 event_loop.exit();
                 return;
-            },
+            }
         };
 
-        self.renderer
-            .as_mut()
-            .unwrap()
-            .set_vsync(false);
+        self.renderer.as_mut().unwrap().set_vsync(false);
 
-        self.square = self.renderer
+        self.square = self
+            .renderer
             .as_mut()
             .unwrap()
             .upload_mesh(&VERTICES_SQUARE, &INDICES_SQUARE);
@@ -113,12 +99,12 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 info!("Close was requested; stopping");
                 event_loop.exit();
-            },
+            }
             WindowEvent::Resized(size) => {
                 renderer.resize(size.width, size.height);
 
                 window.request_redraw();
-            },
+            }
             WindowEvent::RedrawRequested => {
                 self.delta.clock();
 
@@ -137,24 +123,34 @@ impl ApplicationHandler for App {
                         KeyCode::ArrowDown => self.camera.pitch += -speed * 25.0,
                         KeyCode::ArrowLeft => self.camera.yaw += -speed * 25.0,
                         KeyCode::ArrowRight => self.camera.yaw += speed * 25.0,
-                        _ => {},
+                        _ => {}
                     }
                 }
 
-                self.first_square_transform *= glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * dt);
+                self.first_square_transform *=
+                    glam::Mat4::from_rotation_x((10.0 * std::f32::consts::TAU / 60.0) * dt);
 
                 for i in 0..10 {
-                    let transform = self.first_square_transform * glam::Mat4::from_translation(glam::Vec3::new(10.0 * (i as f32 + 1.0), 0.0, 0.0));
-                    renderer.submit_object(self.square, Material {
-                        draw_method: DrawMethod::Triangles
-                    }, transform);
+                    let transform = self.first_square_transform
+                        * glam::Mat4::from_translation(glam::Vec3::new(
+                            10.0 * (i as f32 + 1.0),
+                            0.0,
+                            0.0,
+                        ));
+                    renderer.submit_object(
+                        self.square,
+                        Material {
+                            draw_method: DrawMethod::Triangles,
+                        },
+                        transform,
+                    );
                 }
 
                 renderer.draw(self.camera);
 
                 window.request_redraw();
-            },
-            WindowEvent::KeyboardInput {event, ..} => {
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
                 if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
                     match event.state {
                         winit::event::ElementState::Pressed => {
@@ -172,14 +168,13 @@ impl ApplicationHandler for App {
 }
 
 fn main() -> anyhow::Result<()> {
-    let is_dumb = if !std::io::stdout().is_terminal() || std::env::var("TERM").unwrap_or_default() == "dumb" {
-        true
-    } else {
-        false
-    };
+    let is_dumb =
+        !std::io::stdout().is_terminal() || std::env::var("TERM").unwrap_or_default() == "dumb";
 
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .with_ansi(!is_dumb)
         .init();
 
